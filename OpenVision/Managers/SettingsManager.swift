@@ -42,6 +42,11 @@ final class SettingsManager: ObservableObject {
 
         // Load existing settings or create defaults
         settings = Self.loadSettings(from: settingsURL)
+        // Existing installs saved the former default. Preserve any phrase the user customized.
+        if settings.wakeWord.caseInsensitiveCompare("Ok Vision") == .orderedSame {
+            settings.wakeWord = Constants.Voice.defaultWakeWord
+            performSave()
+        }
 
         print("[SettingsManager] Initialized with settings from: \(settingsURL.path)")
     }

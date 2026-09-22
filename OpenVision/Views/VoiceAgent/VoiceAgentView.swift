@@ -11,6 +11,7 @@ struct VoiceAgentView: View {
 
     @EnvironmentObject var settingsManager: SettingsManager
     @EnvironmentObject var glassesManager: GlassesManager
+    @ObservedObject private var mayaShortcutRouter = MayaShortcutRouter.shared
 
     // MARK: - ViewModel
 
@@ -87,6 +88,9 @@ struct VoiceAgentView: View {
         .animation(.easeInOut(duration: 0.35), value: viewModel.aiTranscript.isEmpty)
         .onAppear { viewModel.onAppear() }
         .onDisappear { viewModel.onDisappear() }
+        .onChange(of: mayaShortcutRouter.voiceRouteID) {
+            viewModel.onAppear()
+        }
         .task {
             await viewModel.requestSpeechAuthorization()
         }

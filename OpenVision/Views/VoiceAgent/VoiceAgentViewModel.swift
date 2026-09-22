@@ -218,7 +218,7 @@ final class VoiceAgentViewModel: ObservableObject {
                     case .appleFoundation:
                         break   // OS-managed — nothing to disconnect
                     case .localGemma:
-                        // Keep the on-device model LOADED so the next "Ok Vision" is instant.
+                        // Keep the on-device model LOADED so the next "Hi Maya" is instant.
                         // Unloading + reloading the ~3.6GB model per conversation was the cause
                         // of the "connecting…" lag and hangs. It stays resident until the app
                         // backgrounds or the user switches backend.
@@ -264,7 +264,7 @@ final class VoiceAgentViewModel: ObservableObject {
         agentState = .connecting
 
         // Model memory follows the History conversation window (5-min inactivity), NOT the wake
-        // session — every "Ok Vision" starts a new session, so clearing here made "what were we
+        // session — every "Hi Maya" starts a new session, so clearing here made "what were we
         // just talking about?" fail seconds after the previous answer. Only reset memory when
         // enough time has passed that History would start a new conversation anyway.
         if !ConversationManager.shared.isCurrentConversationFresh {
@@ -401,7 +401,7 @@ final class VoiceAgentViewModel: ObservableObject {
                 break   // OS-managed — nothing to disconnect
             case .localGemma:
                 // Keep the on-device model loaded — see note in the .idle handler. Reloading it
-                // per conversation was what made "Ok Vision" slow/flaky.
+                // per conversation was what made "Hi Maya" slow/flaky.
                 break
             }
 
@@ -435,11 +435,11 @@ final class VoiceAgentViewModel: ObservableObject {
         isLiveVideoMode = false
     }
 
-    /// Full stop for "Ok Vision stop": silence all output, cancel any in-flight generation, and go
+    /// Full stop for "Hi Maya stop": silence all output, cancel any in-flight generation, and go
     /// quiet back to wake-word listening. The recognizer buffer is already reset by
     /// VoiceCommandService (so the stale transcript can't re-fire); here we just halt + end the turn.
     private func performFullStop() {
-        // "Ok Vision stop" is an interruption too: the user cut the reply off. Close the turn
+        // "Hi Maya stop" is an interruption too: the user cut the reply off. Close the turn
         // deterministically before stopping the engines — delivered-then-stopped turns finish
         // here (markSpokeDone is gated on firstAudio); a stop mid-thinking leaves the turn open
         // to be recorded as failed by the next beginTurn.
@@ -463,7 +463,7 @@ final class VoiceAgentViewModel: ObservableObject {
 
         // In live video mode, a stop means SHUT UP, not "tear down my camera session" — the
         // same rule as the command-level matcher, applied to the mid-reply stop-phrase route.
-        // (Verified on device: "Ok Vision stop" during a reply used to exit the whole mode.)
+        // (Verified on device: "Hi Maya stop" during a reply used to exit the whole mode.)
         // "Stop video" remains the exit phrase.
         if isLiveVideoMode {
             NSLog("[OV] live: stop phrase — silenced, staying in live mode")
@@ -472,7 +472,7 @@ final class VoiceAgentViewModel: ObservableObject {
             return
         }
 
-        // Go quiet: end the turn, return to wake-word idle. Say "Ok Vision" to start again.
+        // Go quiet: end the turn, return to wake-word idle. Say "Hi Maya" to start again.
         userTranscript = ""
         aiTranscript = ""
         currentToolName = nil
@@ -482,7 +482,7 @@ final class VoiceAgentViewModel: ObservableObject {
 
     // MARK: - Voice Command Setup
 
-    /// Warm up the on-device model in the background so the FIRST "Ok Vision" is instant
+    /// Warm up the on-device model in the background so the FIRST "Hi Maya" is instant
     /// (no multi-second load on wake). Only when Local Gemma is the selected, downloaded backend.
     private func preloadLocalModelIfNeeded() {
         guard settingsManager.settings.aiBackend == .localGemma,
@@ -520,7 +520,7 @@ final class VoiceAgentViewModel: ObservableObject {
         // reply's own audio (heard through the mic) from false-triggering the wake word — so it
         // must be true exactly when the assistant is producing output:
         //  - a reply speaking on EITHER engine. Checking only Apple TTS left barge-in dead for
-        //    every Kokoro user: "Ok Vision stop" did nothing while Kokoro spoke.
+        //    every Kokoro user: "Hi Maya stop" did nothing while Kokoro spoke.
         //  - generation still thinking: no reply audio exists yet, so a wake word heard then is
         //    genuinely the user — and it's the only way to cancel a long generation by voice.
         voiceCommandService.shouldAllowInterrupt = { [weak self] in
@@ -566,7 +566,7 @@ final class VoiceAgentViewModel: ObservableObject {
             }
         }
 
-        // "Ok Vision stop" during a reply → full stop, go quiet (the recognizer is already reset
+        // "Hi Maya stop" during a reply → full stop, go quiet (the recognizer is already reset
         // to wake-word idle by VoiceCommandService; here we just halt output + end the turn).
         voiceCommandService.onStopCommand = { [weak self] in
             print("[VoiceAgent] Full stop requested")
@@ -1144,7 +1144,7 @@ final class VoiceAgentViewModel: ObservableObject {
 
         // Bare stop-words are a command to SHUT UP, never a vision question. The stop-phrase
         // branch in VoiceCommandService only runs while a reply is actively playing (.processing);
-        // between replies, live mode sits in conversation mode, where "Ok Vision stop" had its
+        // between replies, live mode sits in conversation mode, where "Hi Maya stop" had its
         // wake word stripped and "stop" arrived HERE — and got sent to the model as a question,
         // producing another description. Every stop attempt triggered more speech: "it keeps on
         // describing, it doesn't simply stop". Silence everything, stay in live mode ("stop

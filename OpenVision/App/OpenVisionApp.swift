@@ -2,7 +2,46 @@
 // App entry point with URL scheme handling for Meta AI registration
 
 import SwiftUI
+import AppIntents
 import MWDATCore
+
+@MainActor
+final class MayaShortcutRouter: ObservableObject {
+    static let shared = MayaShortcutRouter()
+    @Published private(set) var voiceRouteID = UUID()
+
+    private init() {}
+
+    func openVoiceAgent() {
+        voiceRouteID = UUID()
+    }
+}
+
+struct TalkToMayaIntent: AppIntent {
+    static let title: LocalizedStringResource = "Talk to Maya"
+    static let description = IntentDescription("Open OpenVision and start listening for Hi Maya.")
+    static let openAppWhenRun = true
+
+    func perform() async throws -> some IntentResult {
+        await MayaShortcutRouter.shared.openVoiceAgent()
+        return .result()
+    }
+}
+
+struct MayaAppShortcuts: AppShortcutsProvider {
+    static var appShortcuts: [AppShortcut] {
+        AppShortcut(
+            intent: TalkToMayaIntent(),
+            phrases: [
+                "Hi Maya in \(.applicationName)",
+                "Talk to Maya in \(.applicationName)",
+                "Start Maya in \(.applicationName)"
+            ],
+            shortTitle: "Talk to Maya",
+            systemImageName: "waveform.circle.fill"
+        )
+    }
+}
 
 @main
 struct OpenVisionApp: App {

@@ -161,7 +161,7 @@ struct ConversationDetailView: View {
                 Button {
                     // Continue this conversation: make it current (new messages append to it)
                     // and reload its recent exchanges as the model's live context, so the next
-                    // "Ok Vision" follow-up picks up where it left off.
+                    // "Hi Maya" follow-up picks up where it left off.
                     ConversationManager.shared.resumeConversation(conversation)
                     ConversationContext.shared.seed(from: conversation)
                     resumed = true

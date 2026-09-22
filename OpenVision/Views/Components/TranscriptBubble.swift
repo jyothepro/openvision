@@ -181,7 +181,7 @@ struct ToolStatusView: View {
 
         VStack(spacing: 24) {
             TranscriptView(
-                userText: "Ok Vision, what's the weather like today?",
+                userText: "Hi Maya, what's the weather like today?",
                 aiText: "Based on your location, it's currently 72°F and sunny. Perfect weather for being outside!",
                 isAIStreaming: false
             )

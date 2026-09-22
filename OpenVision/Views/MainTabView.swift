@@ -9,6 +9,7 @@ struct MainTabView: View {
     @EnvironmentObject var settingsManager: SettingsManager
     @EnvironmentObject var glassesManager: GlassesManager
     @EnvironmentObject var conversationManager: ConversationManager
+    @ObservedObject private var mayaShortcutRouter = MayaShortcutRouter.shared
 
     // MARK: - State
 
@@ -81,6 +82,9 @@ struct MainTabView: View {
 
             UITabBar.appearance().standardAppearance = appearance
             UITabBar.appearance().scrollEdgeAppearance = appearance
+        }
+        .onChange(of: mayaShortcutRouter.voiceRouteID) {
+            selectedTab = .voice
         }
     }
 }
