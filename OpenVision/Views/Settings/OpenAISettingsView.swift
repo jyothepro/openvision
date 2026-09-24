@@ -73,6 +73,7 @@ struct OpenAISettingsView: View {
                 Text("OpenAI is a cloud backend for text and vision (photos). Useful for verifying the cloud command + camera path.")
             }
         }
+        .mayaFormSurface()
         .navigationTitle("OpenAI")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {

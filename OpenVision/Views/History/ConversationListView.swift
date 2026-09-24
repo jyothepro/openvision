@@ -29,6 +29,7 @@ struct ConversationListView: View {
             }
             .navigationTitle("History")
             .searchable(text: $searchText, prompt: "Search conversations")
+            .background(Theme.bg)
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Button {
@@ -50,7 +51,7 @@ struct ConversationListView: View {
         VStack(spacing: 16) {
             Image(systemName: "bubble.left.and.bubble.right")
                 .font(.system(size: 60))
-                .foregroundColor(.secondary)
+                .foregroundStyle(Theme.accent)
 
             Text("No conversations yet")
                 .font(.headline)
@@ -61,6 +62,8 @@ struct ConversationListView: View {
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 32)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Theme.bg)
     }
 
     // MARK: - Conversation List
@@ -77,6 +80,7 @@ struct ConversationListView: View {
             .onDelete(perform: deleteConversations)
         }
         .listStyle(.plain)
+        .mayaFormSurface()
     }
 
     // MARK: - Filtered Conversations
@@ -154,6 +158,7 @@ struct ConversationDetailView: View {
             }
             .padding()
         }
+        .background(Theme.bg)
         .navigationTitle(conversation.title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -190,9 +195,9 @@ struct MessageBubble: View {
                 Text(message.content)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
-                    .background(message.role == .user ? AnyShapeStyle(Theme.buttonGradient) : AnyShapeStyle(Color(.systemGray5)))
-                    .foregroundColor(message.role == .user ? Color.black.opacity(0.9) : .primary)
-                    .cornerRadius(16)
+                    .background(message.role == .user ? Theme.teal : Theme.bgElevated,
+                                in: RoundedRectangle(cornerRadius: 16))
+                    .foregroundStyle(message.role == .user ? Color.white : Theme.textPrimary)
 
                 Text(message.timestamp.formatted(date: .omitted, time: .shortened))
                     .font(.caption2)

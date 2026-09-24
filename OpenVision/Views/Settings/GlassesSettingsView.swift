@@ -186,6 +186,7 @@ struct GlassesSettingsView: View {
                 Text("Help")
             }
         }
+        .mayaFormSurface()
         .navigationTitle("Glasses")
         .navigationBarTitleDisplayMode(.inline)
         .confirmationDialog(
@@ -270,6 +271,7 @@ struct TroubleshootingView: View {
                 )
             }
         }
+        .mayaFormSurface()
         .navigationTitle("Troubleshooting")
         .navigationBarTitleDisplayMode(.inline)
     }

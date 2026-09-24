@@ -1,10 +1,10 @@
 // OpenVision - TranscriptBubble.swift
-// Emerald-themed transcript bubbles: user = solid emerald (right), AI = frosted glass (left).
+// Maya transcript bubbles: user = teal (right), Maya = warm surface (left).
 // Bubbles float directly over the background — no outer card box.
 
 import SwiftUI
 
-/// Animated typing indicator (three pulsing emerald dots).
+/// Animated typing indicator.
 struct TypingIndicator: View {
     @State private var animating = false
 
@@ -27,7 +27,7 @@ struct TypingIndicator: View {
         .padding(.vertical, 12)
         .background(
             Capsule()
-                .fill(Theme.glass)
+                .fill(Theme.bgElevated)
                 .overlay(Capsule().stroke(Theme.bgElevatedStroke, lineWidth: 1))
         )
         .onAppear { animating = true }
@@ -46,16 +46,16 @@ struct TranscriptBubble: View {
             if isUser { Spacer(minLength: 48) }
 
             VStack(alignment: isUser ? .trailing : .leading, spacing: 5) {
-                Text(isUser ? "You" : "Vision")
+                Text(isUser ? "You" : "Maya")
                     .font(.caption2)
                     .fontWeight(.semibold)
-                    .foregroundColor(isUser ? Theme.accent.opacity(0.9) : Theme.heading.opacity(0.85))
+                    .foregroundStyle(Theme.textSecondary)
                     .textCase(.uppercase)
                     .tracking(1.2)
 
                 Text(text)
                     .font(.callout)
-                    .foregroundColor(isUser ? Color.black.opacity(0.9) : Theme.textPrimary)
+                    .foregroundStyle(isUser ? Color.white : Theme.textPrimary)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
                     .background(bubbleBackground)
@@ -68,23 +68,14 @@ struct TranscriptBubble: View {
     @ViewBuilder
     private var bubbleBackground: some View {
         if isUser {
-            // Solid emerald — the signature accent, black text on green like the reference CTAs.
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Theme.buttonGradient)
-                .shadow(color: Theme.accent.opacity(0.35), radius: 12, y: 2)
+                .fill(Theme.teal)
         } else {
-            // Frosted near-black glass with a faint emerald edge.
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Theme.bgElevated.opacity(0.85))
+                .fill(Theme.bgElevated)
                 .overlay(
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .stroke(
-                            LinearGradient(
-                                colors: [Theme.accent.opacity(0.35), Theme.bgElevatedStroke],
-                                startPoint: .topLeading, endPoint: .bottomTrailing
-                            ),
-                            lineWidth: 1
-                        )
+                        .stroke(Theme.bgElevatedStroke, lineWidth: 1)
                 )
         }
     }
@@ -115,7 +106,7 @@ struct TranscriptView: View {
                     }
                     .frame(maxHeight: 190)
                     .fixedSize(horizontal: false, vertical: aiFitsWithoutScrolling)
-                    .onChange(of: aiText) { _ in
+                    .onChange(of: aiText) {
                         // Follow the newest text as it streams in.
                         withAnimation(.easeOut(duration: 0.15)) {
                             proxy.scrollTo("reply", anchor: .bottom)
@@ -167,11 +158,7 @@ struct ToolStatusView: View {
         .foregroundColor(Theme.textPrimary)
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        .background(
-            Capsule()
-                .fill(Theme.accent.opacity(0.15))
-                .overlay(Capsule().stroke(Theme.accent.opacity(0.4), lineWidth: 1))
-        )
+        .background(Theme.bgElevated, in: Capsule())
     }
 }
 
@@ -192,5 +179,4 @@ struct ToolStatusView: View {
         }
         .padding()
     }
-    .preferredColorScheme(.dark)
 }

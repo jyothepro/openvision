@@ -94,11 +94,11 @@ final class VoiceAgentViewModel: ObservableObject {
 
         var accentColor: Color {
             switch self {
-            case .idle: return .gray
+            case .idle: return Theme.textSecondary
             case .connecting: return .orange
-            case .listening: return .blue
-            case .thinking: return .purple
-            case .speaking: return .green
+            case .listening: return Theme.teal
+            case .thinking: return Theme.leaf
+            case .speaking: return Theme.accent
             case .toolRunning: return .orange
             case .liveVideo: return .red  // Red for live video recording indicator
             }

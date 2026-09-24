@@ -168,6 +168,7 @@ struct VoiceSettingsView: View {
                 Text("The wake phrase also recognizes \"Hey Maya\" and common speech recognition spellings of Maya.")
             }
         }
+        .mayaFormSurface()
         .navigationTitle("Voice Control")
         .navigationBarTitleDisplayMode(.inline)
     }

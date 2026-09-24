@@ -112,6 +112,7 @@ struct GeminiSettingsView: View {
                 Text("Technical Details")
             }
         }
+        .mayaFormSurface()
         .navigationTitle("Gemini Live")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {

@@ -68,6 +68,7 @@ struct KokoroSettingsView: View {
                 }
             }
         }
+        .mayaFormSurface()
         .navigationTitle("Kokoro Voice")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { modelSizeBytes = KokoroTTSService.downloadedSizeBytes() }

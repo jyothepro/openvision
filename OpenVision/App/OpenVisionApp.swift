@@ -19,7 +19,7 @@ final class MayaShortcutRouter: ObservableObject {
 
 struct TalkToMayaIntent: AppIntent {
     static let title: LocalizedStringResource = "Talk to Maya"
-    static let description = IntentDescription("Open OpenVision and start listening for Hi Maya.")
+    static let description = IntentDescription("Open Maya and start listening for Hi Maya.")
     static let openAppWhenRun = true
 
     func perform() async throws -> some IntentResult {
@@ -92,7 +92,7 @@ struct OpenVisionApp: App {
                     OnboardingView(hasCompletedOnboarding: $hasCompletedOnboarding)
                 }
             }
-            .preferredColorScheme(.dark)
+            .tint(Theme.accent)
             .task {
                 // Telemetry settings persist, but the sink lives in memory — without this a
                 // relaunch (or a jetsam kill during a model switch) silently stopped pushing.
