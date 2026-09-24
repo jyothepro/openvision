@@ -26,6 +26,16 @@ final class GlassesManager: ObservableObject {
     /// Number of connected devices
     @Published var connectedDeviceCount: Int = 0
 
+    /// DAT 1.0 device-health values reported by the active glasses.
+    @Published private(set) var batteryLevel: Int?
+    @Published private(set) var chargingStateText: String = "Unknown"
+    @Published private(set) var wearStateText: String = "Unknown"
+    @Published private(set) var hingeStateText: String = "Unknown"
+    @Published private(set) var thermalStateText: String = "Unknown"
+
+    /// True while the DAT 1.0 Hey Meta launch channel is listening for this device.
+    @Published private(set) var isVoiceInvocationReady = false
+
     /// Whether camera streaming is active
     @Published var isStreaming: Bool = false
 
@@ -45,7 +55,7 @@ final class GlassesManager: ObservableObject {
     // MARK: - Private Properties
 
     private let wearables = Wearables.shared
-    // 0.9.0 camera lifecycle: DeviceSession owns the device link, Camera owns the camera
+    // DAT camera lifecycle: DeviceSession owns the device link, Camera owns the camera
     // hardware, camera.stream carries frames. Stopping the camera cascades to the stream.
     private var deviceSession: DeviceSession?
     private var camera: Camera?
@@ -57,6 +67,14 @@ final class GlassesManager: ObservableObject {
     private var videoFrameListenerToken: (any AnyListenerToken)?
     private var photoDataListenerToken: (any AnyListenerToken)?
     private var errorListenerToken: (any AnyListenerToken)?
+    private var standalonePhotoDataListenerToken: (any AnyListenerToken)?
+    private var standalonePhotoErrorListenerToken: (any AnyListenerToken)?
+    private var standalonePhotoProgressListenerToken: (any AnyListenerToken)?
+    private var deviceStateListenerToken: (any AnyListenerToken)?
+    private var voiceInvocationListenerToken: (any AnyListenerToken)?
+    private var voiceInvocationErrorListenerToken: (any AnyListenerToken)?
+    private var voiceInvocationsStream: VoiceInvocationsStream?
+    private var voiceInvocationDevice: DeviceIdentifier?
 
     // MARK: - Callbacks
 
@@ -246,6 +264,8 @@ final class GlassesManager: ObservableObject {
             camera = cam
 
             setupStreamListeners(stream: cam.stream)
+            setupStandalonePhotoListeners(photo: cam.photo)
+            cam.photo.start()
             cam.stream.start()
             isStreaming = true
             print("[GlassesManager] Streaming started successfully")
@@ -286,12 +306,16 @@ final class GlassesManager: ObservableObject {
 
         print("[GlassesManager] Capturing photo")
 
-        // Non-throwing since 0.9.0; failures surface as StreamError.photoCaptureFailed
-        // on the error publisher, which setupStreamListeners already routes to errorMessage.
-        if !stream.capturePhoto(format: .jpeg) {
-            errorMessage = "Failed to start photo capture"
-            print("[GlassesManager] capturePhoto returned false")
+        // DAT 1.0's standalone photo path captures at the glasses' high-quality still resolution
+        // instead of extracting a frame from the lower-resolution live preview stream.
+        guard let photo = camera?.photo else {
+            // Keep the 0.9 stream path as a defensive fallback while firmware rolls out.
+            if !stream.capturePhoto(format: .jpeg) {
+                errorMessage = "Failed to start photo capture"
+            }
+            return
         }
+        photo.capturePhoto(resolution: .full, quality: .high)
     }
 
     // MARK: - Private Methods
@@ -318,6 +342,7 @@ final class GlassesManager: ObservableObject {
                 await MainActor.run {
                     self.connectedDeviceCount = devices.count
                     self.connectedDevice = devices.first
+                    self.configureDAT1DeviceFeatures(for: devices.first)
                     print("[GlassesManager] Devices updated: \(devices.count) connected")
                 }
             }
@@ -378,6 +403,120 @@ final class GlassesManager: ObservableObject {
         }
     }
 
+    private func setupStandalonePhotoListeners(photo: Photo) {
+        standalonePhotoDataListenerToken = photo.photoDataPublisher.listen { [weak self] capture in
+            Task { @MainActor in
+                let data = capture.imageData
+                self?.lastPhotoData = data
+                self?.onPhotoCaptured?(data)
+                print("[GlassesManager] DAT 1.0 high-quality photo captured: \(data.count) bytes")
+            }
+        }
+
+        standalonePhotoErrorListenerToken = photo.errorPublisher.listen { [weak self] error in
+            Task { @MainActor in
+                self?.errorMessage = "Photo capture failed: \(error.localizedDescription)"
+                print("[GlassesManager] Standalone photo error: \(error)")
+            }
+        }
+
+        standalonePhotoProgressListenerToken = photo.transferProgressPublisher.listen { progress in
+            print("[GlassesManager] Photo transfer: \(Int(progress.fraction * 100))%")
+        }
+    }
+
+    /// Starts the stable DAT 1.0 device-state API and the experimental Hey Meta launch stream.
+    /// Voice invocation is kept additive: it only opens Maya; the existing Hi Maya flow remains.
+    private func configureDAT1DeviceFeatures(for deviceId: DeviceIdentifier?) {
+        deviceStateListenerToken = nil
+
+        guard let deviceId, let device = wearables.deviceForIdentifier(deviceId) else {
+            batteryLevel = nil
+            chargingStateText = "Unknown"
+            wearStateText = "Unknown"
+            hingeStateText = "Unknown"
+            thermalStateText = "Unknown"
+            stopVoiceInvocations()
+            return
+        }
+
+        deviceStateListenerToken = device.addDeviceStateListener { [weak self] state in
+            Task { @MainActor in
+                self?.batteryLevel = state.batteryLevel
+                self?.chargingStateText = Self.chargingText(state.chargingState)
+                self?.wearStateText = Self.wearText(state.donState)
+                self?.hingeStateText = Self.hingeText(state.hingeState)
+                self?.thermalStateText = Self.thermalText(state.thermalLevel)
+            }
+        }
+
+        guard voiceInvocationDevice != deviceId else { return }
+        stopVoiceInvocations()
+
+        do {
+            let stream = try VoiceInvocationsStream(wearables: wearables)
+            voiceInvocationListenerToken = stream.invocationsPublisher.listen { invocation in
+                guard let launch = invocation as? LaunchApp else { return }
+                Task { @MainActor in
+                    MayaShortcutRouter.shared.openVoiceAgent()
+                    let acknowledged = await launch.responseHandle.sendSuccess(actionOutput: "Opened Maya")
+                    print("[GlassesManager] Hey Meta launch acknowledged: \(acknowledged)")
+                }
+            }
+            voiceInvocationErrorListenerToken = stream.errorPublisher.listen { [weak self] error in
+                Task { @MainActor in
+                    self?.isVoiceInvocationReady = false
+                    print("[GlassesManager] Voice invocation error: \(error.description)")
+                }
+            }
+            try stream.start(deviceIdentifier: deviceId)
+            voiceInvocationsStream = stream
+            voiceInvocationDevice = deviceId
+            isVoiceInvocationReady = true
+            print("[GlassesManager] DAT 1.0 Hey Meta launch stream ready")
+        } catch {
+            isVoiceInvocationReady = false
+            print("[GlassesManager] Voice invocation unavailable: \(error.localizedDescription)")
+        }
+    }
+
+    private func stopVoiceInvocations() {
+        voiceInvocationsStream?.stop()
+        voiceInvocationsStream = nil
+        voiceInvocationListenerToken = nil
+        voiceInvocationErrorListenerToken = nil
+        voiceInvocationDevice = nil
+        isVoiceInvocationReady = false
+    }
+
+    private static func chargingText(_ state: ChargingState) -> String {
+        switch state {
+        case .charging: return "Charging"
+        case .notCharging: return "Not charging"
+        case .unknown: return "Unknown"
+        }
+    }
+
+    private static func wearText(_ state: DonState) -> String {
+        switch state {
+        case .donned: return "Worn"
+        case .doffed: return "Not worn"
+        case .unknown: return "Unknown"
+        }
+    }
+
+    private static func hingeText(_ state: HingeState) -> String {
+        switch state {
+        case .open: return "Open"
+        case .closed: return "Closed"
+        case .unknown: return "Unknown"
+        }
+    }
+
+    private static func thermalText(_ state: ThermalLevel) -> String {
+        String(describing: state).replacingOccurrences(of: "_", with: " ").capitalized
+    }
+
     /// TEMP DIAGNOSTIC (issue #55 follow-up): the DAT SDK logs its teardown reasons via OSLog,
     /// which `devicectl --console` can't see. The app CAN read its own process's entries, so on
     /// session failure dump every non-Apple subsystem line from the last `seconds` to stdout.
@@ -404,5 +543,8 @@ final class GlassesManager: ObservableObject {
         videoFrameListenerToken = nil
         photoDataListenerToken = nil
         errorListenerToken = nil
+        standalonePhotoDataListenerToken = nil
+        standalonePhotoErrorListenerToken = nil
+        standalonePhotoProgressListenerToken = nil
     }
 }
