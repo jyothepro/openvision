@@ -21,7 +21,7 @@ struct AdditionalInstructionsView: View {
             TextEditor(text: $instructions)
                 .padding()
                 .scrollContentBackground(.hidden)
-                .background(Color(.systemGroupedBackground))
+                .background(Theme.bgElevated)
 
             // Character count
             HStack {
@@ -31,8 +31,9 @@ struct AdditionalInstructionsView: View {
                     .foregroundColor(.secondary)
                     .padding()
             }
-            .background(Color(.systemGroupedBackground))
+            .background(Theme.bg)
         }
+        .background(Theme.bg)
         .navigationTitle("Custom Instructions")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -63,7 +64,7 @@ struct AdditionalInstructionsView: View {
                     .padding(.horizontal)
                     .padding(.bottom, 8)
             }
-            .background(Color(.systemBackground))
+            .background(Theme.bg)
         }
     }
 

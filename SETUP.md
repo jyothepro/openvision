@@ -279,7 +279,7 @@ If you have Meta Ray-Ban glasses:
 
 ### OpenClaw Mode
 
-1. Tap the main orb button OR say **"Hey Vision"**
+1. Tap the main orb button OR say **"Hi Maya"**
 2. Wait for "Listening..." status
 3. Speak your question or command
 4. AI responds via text-to-speech

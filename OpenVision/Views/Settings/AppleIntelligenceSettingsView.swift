@@ -36,6 +36,7 @@ struct AppleIntelligenceSettingsView: View {
                 Text("Supports the same hands-free commands as Local Gemma: face recognition and web search, routed on-device.")
             }
         }
+        .mayaFormSurface()
         .navigationTitle("Apple Intelligence")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { status = apple.availabilityMessage }

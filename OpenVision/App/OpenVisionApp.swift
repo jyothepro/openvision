@@ -2,7 +2,56 @@
 // App entry point with URL scheme handling for Meta AI registration
 
 import SwiftUI
+import AppIntents
 import MWDATCore
+
+@MainActor
+final class MayaShortcutRouter: ObservableObject {
+    static let shared = MayaShortcutRouter()
+    @Published private(set) var voiceRouteID = UUID()
+    private var pendingListeningRequest = false
+
+    private init() {}
+
+    func openVoiceAgent(startListening: Bool = true) {
+        pendingListeningRequest = pendingListeningRequest || startListening
+        voiceRouteID = UUID()
+    }
+
+    /// External launches (App Intent or DAT Hey Meta) must survive a cold app launch, where the
+    /// request can arrive before VoiceAgentView exists. The Voice screen consumes it once ready.
+    func consumeListeningRequest() -> Bool {
+        let shouldStart = pendingListeningRequest
+        pendingListeningRequest = false
+        return shouldStart
+    }
+}
+
+struct TalkToMayaIntent: AppIntent {
+    static let title: LocalizedStringResource = "Talk to Maya"
+    static let description = IntentDescription("Open Maya and start listening for Hi Maya.")
+    static let openAppWhenRun = true
+
+    func perform() async throws -> some IntentResult {
+        await MayaShortcutRouter.shared.openVoiceAgent()
+        return .result()
+    }
+}
+
+struct MayaAppShortcuts: AppShortcutsProvider {
+    static var appShortcuts: [AppShortcut] {
+        AppShortcut(
+            intent: TalkToMayaIntent(),
+            phrases: [
+                "Hi Maya in \(.applicationName)",
+                "Talk to Maya in \(.applicationName)",
+                "Start Maya in \(.applicationName)"
+            ],
+            shortTitle: "Talk to Maya",
+            systemImageName: "waveform.circle.fill"
+        )
+    }
+}
 
 @main
 struct OpenVisionApp: App {
@@ -53,7 +102,7 @@ struct OpenVisionApp: App {
                     OnboardingView(hasCompletedOnboarding: $hasCompletedOnboarding)
                 }
             }
-            .preferredColorScheme(.dark)
+            .tint(Theme.accent)
             .task {
                 // Telemetry settings persist, but the sink lives in memory — without this a
                 // relaunch (or a jetsam kill during a model switch) silently stopped pushing.

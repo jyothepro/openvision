@@ -14,6 +14,27 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    HStack(spacing: 14) {
+                        Image("MayaMark")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 54, height: 54)
+                            .padding(5)
+                            .background(Theme.ivory, in: RoundedRectangle(cornerRadius: 15))
+                            .accessibilityHidden(true)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Maya")
+                                .font(.title3.bold())
+                                .foregroundStyle(Theme.textPrimary)
+                            Text("Your glasses companion")
+                                .font(.subheadline)
+                                .foregroundStyle(Theme.textSecondary)
+                        }
+                    }
+                    .padding(.vertical, 5)
+                }
+
                 // AI Backend Section
                 Section {
                     NavigationLink {
@@ -155,6 +176,7 @@ struct SettingsView: View {
                     Text("OpenVision is open source under the MIT license.")
                 }
             }
+            .mayaFormSurface()
             .navigationTitle("Settings")
         }
     }

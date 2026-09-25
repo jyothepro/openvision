@@ -8,7 +8,7 @@ import AVFoundation
 /// Voice command service with wake word detection
 ///
 /// Features:
-/// - Wake word detection ("Ok Vision")
+/// - Wake word detection ("Hi Maya")
 /// - Command capture after wake word
 /// - Silence detection to end command
 /// - Conversation mode (follow-ups without wake word)
@@ -48,6 +48,14 @@ final class VoiceCommandService: ObservableObject {
         SettingsManager.shared.settings.wakeWord
     }
 
+    private var wakePhraseVariations: [String] {
+        let configured = wakeWord.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard configured == Constants.Voice.defaultWakeWord.lowercased() else {
+            return configured.isEmpty ? [] : [configured]
+        }
+        return ["hi maya", "hey maya", "hi mia", "hey mia"]
+    }
+
     var isWakeWordEnabled: Bool {
         SettingsManager.shared.settings.wakeWordEnabled
     }
@@ -61,7 +69,7 @@ final class VoiceCommandService: ObservableObject {
     /// Called when wake word is detected
     var onWakeWordDetected: (() -> Void)?
 
-    /// Called when the user says a stop phrase ("stop", "ok vision stop") during TTS/processing.
+    /// Called when the user says a stop phrase ("stop", "hi maya stop") during TTS/processing.
     /// The app should halt everything and go quiet; the recognizer is reset to wake-word idle here.
     var onStopCommand: (() -> Void)?
 
@@ -285,15 +293,13 @@ final class VoiceCommandService: ObservableObject {
     }
 
     /// Prime the recognizer for the wake phrase and short-phrase detection. `contextualStrings`
-    /// biases recognition toward "Ok Vision", which is the single biggest factor in reliably
+    /// biases recognition toward "Hi Maya", which is the single biggest factor in reliably
     /// hearing the wake word over the low-quality glasses Bluetooth-HFP mic (8 kHz). `.search`
     /// (short phrase) beats `.dictation` (long-form) for a quick wake word + command.
     private func configureRecognitionRequest(_ request: SFSpeechAudioBufferRecognitionRequest) {
         request.shouldReportPartialResults = true
         request.taskHint = .search
-        var phrases = ["Ok Vision", "Okay Vision", "Hey Vision", "Vision"]
-        if !wakeWord.isEmpty { phrases.insert(wakeWord, at: 0) }
-        request.contextualStrings = phrases
+        request.contextualStrings = wakePhraseVariations
     }
 
     /// SFSpeechRecognizer stops after ~1 minute or when it emits a final result / errors. While
@@ -304,7 +310,7 @@ final class VoiceCommandService: ObservableObject {
         // Idle (wake-word) AND conversation mode both rely on an always-running recognizer with no
         // other flow to revive it. Restricting this to `.idle` caused a deaf-mic race: an empty
         // final result arriving while still in conversationMode skipped the restart here, then the
-        // conversation timeout returned to idle with a dead recognizer — and every "Ok Vision"
+        // conversation timeout returned to idle with a dead recognizer — and every "Hi Maya"
         // after that hit silence. (`.listening`/`.processing` are excluded on purpose: their
         // restarts are owned by handleCommandComplete / the TTS flow.)
         let needsAlwaysOnRecognizer = (state == .idle && isWakeWordEnabled) || state == .conversationMode
@@ -459,7 +465,7 @@ final class VoiceCommandService: ObservableObject {
 
         print("[VoiceCommand] Restarted recognition (cleared buffer)")
         // Restart churn is the proxy for recognizer health: a high rate here is what shreds
-        // transcripts into fragments like "53258 Okay Vision".
+        // transcripts into fragments like "53258 Hey Maya".
         MetricsCollector.shared.count("recognition_restart")
     }
 
@@ -539,7 +545,7 @@ final class VoiceCommandService: ObservableObject {
         case .listening, .conversationMode:
             // Strip wake word from transcription (like xmeta does)
             var command = transcription
-            for ww in [wakeWord.lowercased(), "ok vision", "okay vision", "hey vision", "hi vision"] {
+            for ww in wakePhraseVariations {
                 if let range = command.lowercased().range(of: ww) {
                     command = String(command[range.upperBound...]).trimmingCharacters(in: .whitespaces)
                     break
@@ -563,12 +569,12 @@ final class VoiceCommandService: ObservableObject {
             }
 
         case .processing:
-            // Check for wake word to interrupt TTS (e.g., "ok vision stop")
+            // Check for wake word to interrupt TTS (e.g., "hi maya stop")
             let allowInterrupt = shouldAllowInterrupt?() ?? false
 
-            // "Ok Vision stop" / "stop" during TTS → FULL STOP. Handle this before the general
+            // "Hi Maya stop" / "stop" during TTS → FULL STOP. Handle this before the general
             // barge-in: halt everything and go quiet. Critically, reset recognition to clear the
-            // buffer — the transcript still starts with "ok vision", so without a reset it would
+            // buffer — the transcript still starts with "hi maya", so without a reset it would
             // re-match this branch on every partial result and churn listening/processing forever.
             if allowInterrupt && isStopPhrase(transcription) {
                 print("[VoiceCommand] Stop phrase during TTS — halting")
@@ -577,7 +583,7 @@ final class VoiceCommandService: ObservableObject {
                 hasSpokenThisTurn = false
                 silenceTimer?.invalidate(); silenceTimer = nil
                 state = isWakeWordEnabled ? .idle : .listening
-                restartRecognition()   // clear the stale "ok vision ... stop" buffer
+                restartRecognition()   // clear the stale "hi maya ... stop" buffer
                 return
             }
 
@@ -585,16 +591,16 @@ final class VoiceCommandService: ObservableObject {
             // the reply's own audio, and a wake word mid-buffer is suspect. But during THINKING
             // no reply audio exists — everything in the buffer is the user — and requiring the
             // wake word first discarded genuine interrupts whenever the user led with natural
-            // preamble ("hey, ...ok vision, new question"): the log showed eight detections, all
+            // preamble ("hey, ...hi maya, new question"): the log showed eight detections, all
             // dropped. isBargeInPaused is true exactly while either engine is audible, so it is
             // the precise boundary between the two regimes.
             if allowInterrupt && detectWakeWord(in: transcription, bypassCooldown: true)
                 && (wakeWordAtStart(transcription) || !isBargeInPaused) {
-                // A BARE "Ok Vision" with nothing after it, mid-reply, is almost always the mic
+                // A BARE "Hi Maya" with nothing after it, mid-reply, is almost always the mic
                 // hallucinating the wake word from the reply audio the speaker is playing (echo) —
-                // NOT a deliberate interrupt. Real interrupts carry a follow-up ("Ok Vision, what
+                // NOT a deliberate interrupt. Real interrupts carry a follow-up ("Hi Maya, what
                 // about Mars?"). Require that command; otherwise ignore and let the reply finish.
-                // (To simply silence a reply, "Ok Vision stop" is handled by the stop-phrase branch
+                // (To simply silence a reply, "Hi Maya stop" is handled by the stop-phrase branch
                 // above.)
                 let command = extractCommandAfterWakeWord(transcription)
                 guard !command.isEmpty else { return }
@@ -624,7 +630,7 @@ final class VoiceCommandService: ObservableObject {
             // during the processing→speaking window it fired on our OWN audio — the command echo
             // (before TTS starts, when isBargeInPaused is still false) and the reply the mic hears
             // back — flipping the UI to "Listening" mid-reply and tearing the session down. Deliberate
-            // interruption is handled above: "Ok Vision …" (wake word at start) or a stop phrase.
+            // interruption is handled above: "Hi Maya …" (wake word at start) or a stop phrase.
         }
     }
 
@@ -641,20 +647,14 @@ final class VoiceCommandService: ObservableObject {
     }
 
     /// True when a wake-word variation sits at (or very near) the START of the transcript — i.e. a
-    /// deliberate "Ok Vision …" barge-in. During TTS the mic also hears the reply itself, whose
-    /// transcription can incidentally contain a "…vision…" buried mid-sentence; requiring the wake
+    /// deliberate "Hi Maya …" barge-in. During TTS the mic also hears the reply itself, whose
+    /// transcription can incidentally contain "…Maya…" buried mid-sentence; requiring the wake
     /// word up front rejects those phantoms while still catching a real interrupt.
     private func wakeWordAtStart(_ text: String) -> Bool {
         let lower = text.lowercased()
-        let variations = [
-            wakeWord.lowercased(),
-            "ok vision", "okay vision", "o.k. vision", "o k vision",
-            "hey vision", "hi vision",
-            "a vision", "heavy vision", "have vision", "obey vision", "oak vision"
-        ]
-        for v in variations {
+        for v in wakePhraseVariations {
             if let r = lower.range(of: v) {
-                // Characters of speech before the wake word. A little leeway ("uh, ok vision")
+                // Characters of speech before the wake word. A little leeway ("uh, hi maya")
                 // is fine; a whole sentence in front of it means it's echo, not a barge-in.
                 if lower.distance(from: lower.startIndex, to: r.lowerBound) <= 12 { return true }
             }
@@ -667,28 +667,7 @@ final class VoiceCommandService: ObservableObject {
         guard bypassCooldown || !wakeWordCooldownActive else { return false }
 
         let lowercased = text.lowercased()
-        let wakeWordLower = wakeWord.lowercased()
-
-        // Check for exact match or common variations/misrecognitions
-        let variations = [
-            wakeWordLower,
-            // OK Vision variants (most reliable)
-            "ok vision",
-            "okay vision",
-            "o.k. vision",
-            "o k vision",
-            // Ok Vision variants
-            "hey vision",
-            "hi vision",
-            // Common misrecognitions
-            "a vision",
-            "heavy vision",
-            "have vision",
-            "obey vision",
-            "oak vision"
-        ]
-
-        let detected = variations.contains { lowercased.contains($0) }
+        let detected = wakePhraseVariations.contains { lowercased.contains($0) }
         if detected {
             print("[VoiceCommand] Detected wake word in: '\(text)'")
         }
@@ -698,16 +677,7 @@ final class VoiceCommandService: ObservableObject {
     /// Extract command text after wake word
     private func extractCommandAfterWakeWord(_ text: String) -> String {
         let lowercased = text.lowercased()
-        let wakeWordLower = wakeWord.lowercased()
-
-        let variations = [
-            wakeWordLower,
-            "ok vision", "okay vision", "o.k. vision", "o k vision",
-            "hey vision", "hi vision",
-            "a vision", "heavy vision", "have vision", "obey vision", "oak vision"
-        ]
-
-        for variation in variations {
+        for variation in wakePhraseVariations {
             if let range = lowercased.range(of: variation) {
                 let afterWakeWord = String(text[range.upperBound...])
                     .trimmingCharacters(in: .whitespaces)
@@ -747,9 +717,7 @@ final class VoiceCommandService: ObservableObject {
     private func handleCommandComplete(_ text: String) {
         // Remove wake word from beginning
         var command = text
-        let wakeWordLower = wakeWord.lowercased()
-
-        for prefix in [wakeWordLower, "hey vision", "ok vision", "okay vision"] {
+        for prefix in wakePhraseVariations {
             if command.lowercased().hasPrefix(prefix) {
                 command = String(command.dropFirst(prefix.count)).trimmingCharacters(in: .whitespaces)
                 break
@@ -773,7 +741,7 @@ final class VoiceCommandService: ObservableObject {
         // Reset the recognizer's OWN buffer too. `currentTranscription = ""` only clears our copy;
         // the live SFSpeechRecognitionResult keeps accumulating the whole utterance. Without this,
         // the captured command ("…sun and the moon") lingers in the buffer during TTS, and a single
-        // misheard "Okay Vision" (from the reply audio / ambient) tacks onto it and false-fires the
+        // misheard "Hey Maya" (from the reply audio / ambient) tacks onto it and false-fires the
         // wake-word interrupt — cutting the reply off and flipping the UI back to "Listening".
         restartRecognition()
 

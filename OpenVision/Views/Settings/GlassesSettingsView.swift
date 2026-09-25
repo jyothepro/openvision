@@ -111,6 +111,22 @@ struct GlassesSettingsView: View {
                                 .foregroundColor(.secondary)
                         }
                     }
+
+                    HStack {
+                        Text("Hey Meta Launch")
+                        Spacer()
+                        Text(glassesManager.voiceInvocationStatusText)
+                            .foregroundColor(glassesManager.isVoiceInvocationReady ? .green : .secondary)
+                            .multilineTextAlignment(.trailing)
+                    }
+
+                    if let battery = glassesManager.batteryLevel {
+                        LabeledContent("Battery", value: "\(battery)%")
+                    }
+                    LabeledContent("Wear State", value: glassesManager.wearStateText)
+                    LabeledContent("Hinges", value: glassesManager.hingeStateText)
+                    LabeledContent("Charging", value: glassesManager.chargingStateText)
+                    LabeledContent("Thermal", value: glassesManager.thermalStateText)
                 } header: {
                     Text("Device Status")
                 }
@@ -156,7 +172,7 @@ struct GlassesSettingsView: View {
                             await glassesManager.capturePhoto()
                         }
                     } label: {
-                        Label("Capture Photo", systemImage: "camera")
+                        Label("Capture High-Quality Photo", systemImage: "camera")
                     }
                     .disabled(!glassesManager.isStreaming)
                 } header: {
@@ -186,6 +202,7 @@ struct GlassesSettingsView: View {
                 Text("Help")
             }
         }
+        .mayaFormSurface()
         .navigationTitle("Glasses")
         .navigationBarTitleDisplayMode(.inline)
         .confirmationDialog(
@@ -270,6 +287,7 @@ struct TroubleshootingView: View {
                 )
             }
         }
+        .mayaFormSurface()
         .navigationTitle("Troubleshooting")
         .navigationBarTitleDisplayMode(.inline)
     }

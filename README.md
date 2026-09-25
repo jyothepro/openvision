@@ -28,7 +28,7 @@
 
 ## What Can You Do?
 
-> "Ok Vision, what am I looking at?"
+> "Hi Maya, what am I looking at?"
 
 | Use Case | Example |
 |----------|---------|
@@ -56,13 +56,13 @@
 - **OpenAI**: GPT-4o text + vision over the Chat Completions API — works with any **OpenAI-compatible** endpoint (OpenRouter, Groq, local servers, etc.). Also drives **live video** via the **Realtime API** (`gpt-realtime`) — continuous voice + camera frames (see below).
 
 ### Live Video — Real-Time Voice + Vision
-Say **"Ok Vision, start video stream"** to enter a live mode where the glasses camera stays on and the AI answers questions about what you're seeing. Ask freely — no wake word between questions — until you say **"stop video"**. Live video routes to whichever backend you've selected:
+Say **"Hi Maya, start video stream"** to enter a live mode where the glasses camera stays on and the AI answers questions about what you're seeing. Ask freely — no wake word between questions — until you say **"stop video"**. Live video routes to whichever backend you've selected:
 - **Gemini Live** — native continuous audio + 1fps video (cloud).
 - **OpenAI** — the **Realtime API** (`gpt-realtime`): streaming voice + camera frames over WebSocket. Uses the same OpenAI key/base URL you already set (so OpenAI-compatible gateways work too).
 - **Local (SmolVLM2)** — **fully on-device** live video: Apple speech-to-text in, on-device SmolVLM2 answers on the latest frame, spoken back with your chosen voice. **No cloud, no cost, works with no signal.**
 
 ### On-Device Photos (SmolVLM2)
-With **SmolVLM2** selected as your local model, **"Ok Vision, take a photo and tell me what this is"** captures a frame from the glasses and answers **entirely on-device** — nothing leaves the phone. Other local models stay text-only and hand camera questions to a cloud backend. (Images are resized on-device to keep the vision encoder within iOS memory limits.)
+With **SmolVLM2** selected as your local model, **"Hi Maya, take a photo and tell me what this is"** captures a frame from the glasses and answers **entirely on-device** — nothing leaves the phone. Other local models stay text-only and hand camera questions to a cloud backend. (Images are resized on-device to keep the vision encoder within iOS memory limits.)
 
 ### On-Device Neural Voice (Kokoro)
 - A **natural, offline, private voice** (Kokoro-82M) running on-device via MLX — selectable from a Speech Engine dropdown with a voice picker.
@@ -85,16 +85,16 @@ With **SmolVLM2** selected as your local model, **"Ok Vision, take a photo and t
 - See [docs/native-tools.md](docs/native-tools.md) for the full design.
 
 ### On-Device Face Recognition (Apple Vision)
-- Teach it faces hands-free: *"Ok Vision, remember this person as Sara"*
-- Recognize them later: *"Ok Vision, who is this?"*
+- Teach it faces hands-free: *"Hi Maya, remember this person as Sara"*
+- Recognize them later: *"Hi Maya, who is this?"*
 - Runs **entirely on-device** (Apple Vision `computeDistance`) — no cloud, no photos leave your phone
 - Intent is parsed by the on-device model (agentic) — **any phrasing works**, and it only triggers for a person actually in view
 
 ### Smart Voice Control
-- Reliable wake word activation ("Ok Vision") for privacy — primed recognition + self-restart so it keeps listening (survives idle, replies, and glasses off/on)
-- Barge-in support - interrupt AI anytime by saying "Ok Vision"
+- Reliable wake word activation ("Hi Maya") for privacy — primed recognition + self-restart so it keeps listening (survives idle, replies, and glasses off/on)
+- Barge-in support - interrupt AI anytime by saying "Hi Maya"
 - Conversation mode - follow-up questions without wake word
-- "Ok Vision stop" - stop AI mid-speech
+- "Hi Maya stop" - stop AI mid-speech
 - Audio routes correctly whether you're using the glasses or the phone alone (loud speaker, not the earpiece)
 
 ### On-Device Model Management
@@ -126,7 +126,7 @@ With **SmolVLM2** selected as your local model, **"Ok Vision, take a photo and t
 
 | Screen | Description |
 |--------|-------------|
-| **Voice Assistant** | Tap the orb or say "Ok Vision" — live transcripts, distinct listening/thinking/speaking states |
+| **Voice Assistant** | Tap the orb or say "Hi Maya" — live transcripts, distinct listening/thinking/speaking states |
 | **Settings** | Configure AI backend, web search, glasses, voice control, and advanced options |
 | **AI Backends** | Choose Local (MLX), Apple Intelligence (on-device), OpenClaw (tools), Gemini Live (low latency), or OpenAI |
 | **Local Models** | Download and manage on-device models (Qwen, Gemma, SmolVLM2, FastVLM) with real sizes and one-tap switching |
@@ -219,7 +219,7 @@ Full instructions, CLI build commands, and troubleshooting: **[SETUP.md](SETUP.m
 **For OpenAI (text, vision + live video):**
 1. Get an [OpenAI API key](https://platform.openai.com/api-keys)
 2. Settings → AI Backend → **OpenAI**, paste the key (and optionally a base URL / models)
-3. Say **"Ok Vision, start video stream"** to use live video over the Realtime API
+3. Say **"Hi Maya, start video stream"** to use live video over the Realtime API
 
 **For on-device vision (SmolVLM2):**
 1. Settings → AI Backend → **Local (MLX)**
@@ -230,13 +230,17 @@ Full instructions, CLI build commands, and troubleshooting: **[SETUP.md](SETUP.m
 
 ## Usage
 
+### Siri shortcut
+
+Say **"Siri, talk to Maya in OpenVision"** or **"Siri, hi Maya in OpenVision"** to open the Voice Agent. Once OpenVision is active, say **"Hi Maya"** to begin a conversation. The shortcut is also available as **Talk to Maya** in the Shortcuts app. iOS may ask you to unlock the phone before opening OpenVision.
+
 ### OpenClaw Mode (Default)
 
 ```
-You: "Ok Vision"                    → Wake word activates listening
+You: "Hi Maya"                    → Wake word activates listening
 You: "What's the weather today?"    → AI processes and responds via TTS
 You: "Take a photo"                 → Captures from glasses, analyzes
-You: "Ok Vision stop"               → Interrupts AI mid-speech
+You: "Hi Maya stop"               → Interrupts AI mid-speech
 [Silence for 30s]                   → Conversation ends
 ```
 
@@ -245,7 +249,7 @@ You: "Ok Vision stop"               → Interrupts AI mid-speech
 Works with whichever backend is selected — Gemini Live, OpenAI Realtime, or fully on-device SmolVLM2.
 
 ```
-You: "Ok Vision, start video stream"     → Enters live video mode (uses your selected backend)
+You: "Hi Maya, start video stream"     → Enters live video mode (uses your selected backend)
 [Glasses camera streams; the AI sees continuously]
 You: "What am I looking at?"             → AI sees and responds
 You: "And is this a good deal?"          → Keep asking — no wake word needed
@@ -258,7 +262,7 @@ You: "Stop video"                        → Exits live video mode
 
 ```
 [Select Local → SmolVLM2 in Settings]
-You: "Ok Vision, take a photo and tell me what this is"
+You: "Hi Maya, take a photo and tell me what this is"
 [Glasses capture a frame → SmolVLM2 answers on-device → spoken reply]
 ```
 
@@ -266,8 +270,8 @@ You: "Ok Vision, take a photo and tell me what this is"
 
 | Command | Action |
 |---------|--------|
-| "Ok Vision" | Activate listening (wake word) |
-| "Ok Vision stop" | Stop AI while speaking |
+| "Hi Maya" | Activate listening (wake word) |
+| "Hi Maya stop" | Stop AI while speaking |
 | "Take a photo" | Capture and analyze view (on-device with SmolVLM2, else cloud) |
 | "What do you see?" | Describe current view |
 | "Remember this person as Sara" | Enroll a face (on-device) |
@@ -319,7 +323,7 @@ Face recognition, web search, and conversation memory all run on the **on-device
 ### Voice Section
 | Setting | Description |
 |---------|-------------|
-| **Wake Word** | Activation phrase (default: "Ok Vision") |
+| **Wake Word** | Activation phrase (default: "Hi Maya") |
 | **Wake Word Enabled** | Toggle wake word requirement |
 | **Activation Sound** | Play chime on wake word |
 | **Conversation Timeout** | Auto-end after silence (15s-2min) |

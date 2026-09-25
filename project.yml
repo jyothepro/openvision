@@ -108,22 +108,22 @@ packages:
     url: https://github.com/facebook/meta-wearables-dat-ios
     # Pinned EXACTLY — this SDK rewrites its API most releases, so never float (`from:`).
     #
-    # 0.5.0 -> 0.9.0: device support gates on SDK version. "Blayzer Optics" glasses (issue #55)
+    # 0.5.0 -> 1.0.0: device support gates on SDK version. "Blayzer Optics" glasses (issue #55)
     # enumerate as 0 devices on 0.5.0, which predates that hardware; support for the newer
-    # frames landed in 0.6.0 (Ray-Ban Meta Optics) and 0.8.0 (Meta Glasses). 0.9.0 is the
+    # frames landed in 0.6.0 (Ray-Ban Meta Optics) and 0.8.0 (Meta Glasses). 1.0.0 keeps the
     # camera-consolidation API: DeviceSession.addCamera(config:) -> Camera -> camera.stream
-    # (StreamSession/addStream are gone). Requires iOS 17.2+.
+    # and adds voice invocation, device-health, and standalone high-quality photo APIs.
+    # Requires iOS 17.2+.
     # MUST be regression-tested on Gen 1/2 glasses (register + stream + HFP mic) before merge.
-    exactVersion: "0.9.0"
-  # PrismML fork of mlx-swift, adding 1-bit quantized Metal kernels (upstream PR pending).
-  # Needed to load Bonsai-8B (Qwen3-8B at 1-bit g128, 1.28 GB vs E2B's 3.6 GB). Declared at the
-  # ROOT so every consumer (mlx-swift-lm + the three vendored packages) resolves the same identity.
-  # Pinned to v0.31.6_prism, NOT the fork's default `prism` branch: `prism` is 10 commits behind and
-  # misses "gate NAX to gen-18+ (M5/gen-17 miscompute)" — a correctness fix for current Apple GPUs.
-  # Upstream base is 0.31.6 (we were on 0.31.4); Kokoro asks for >= 0.29.1, so it satisfies both.
+    exactVersion: "1.0.0"
+  # Keep MLX pinned at the root so every consumer resolves the same identity. The PrismML
+  # v0.31.6_prism branch now requires Swift tools 6.3, which Xcode 26.2 cannot load. Upstream
+  # 0.31.4 is the last version used by this project that is compatible with Xcode 26.2.
+  # This keeps the standard local MLX models and Kokoro available; Bonsai's 1-bit kernels require
+  # upgrading Xcode and switching this dependency back to the PrismML fork.
   mlx-swift:
-    url: https://github.com/PrismML-Eng/mlx-swift.git
-    branch: v0.31.6_prism
+    url: https://github.com/ml-explore/mlx-swift.git
+    exactVersion: "0.31.4"
   mlx-swift-lm:
     url: https://github.com/ml-explore/mlx-swift-lm.git
     # Pinned to a main commit PAST the 3.31.4 tag that fixes Gemma 4 E2B loading. 3.31.4's VLM backbone
