@@ -115,8 +115,9 @@ struct GlassesSettingsView: View {
                     HStack {
                         Text("Hey Meta Launch")
                         Spacer()
-                        Text(glassesManager.isVoiceInvocationReady ? "Ready" : "Unavailable")
+                        Text(glassesManager.voiceInvocationStatusText)
                             .foregroundColor(glassesManager.isVoiceInvocationReady ? .green : .secondary)
+                            .multilineTextAlignment(.trailing)
                     }
 
                     if let battery = glassesManager.batteryLevel {

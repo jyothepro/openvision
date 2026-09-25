@@ -85,10 +85,14 @@ struct VoiceAgentView: View {
         .animation(.easeInOut(duration: 0.3), value: viewModel.agentState)
         .animation(.easeInOut(duration: 0.35), value: viewModel.userTranscript.isEmpty)
         .animation(.easeInOut(duration: 0.35), value: viewModel.aiTranscript.isEmpty)
-        .onAppear { viewModel.onAppear() }
+        .onAppear {
+            viewModel.onAppear()
+            startListeningForExternalLaunchIfNeeded()
+        }
         .onDisappear { viewModel.onDisappear() }
         .onChange(of: mayaShortcutRouter.voiceRouteID) {
             viewModel.onAppear()
+            startListeningForExternalLaunchIfNeeded()
         }
         .task {
             await viewModel.requestSpeechAuthorization()
@@ -107,6 +111,17 @@ struct VoiceAgentView: View {
         // Observe VoiceCommandService state changes
         .onChange(of: voiceCommandService.state) { _, newState in
             viewModel.voiceStateChanged(newState)
+        }
+    }
+
+    /// A DAT `LaunchApp` invocation should be hands-free: navigating to Voice is not enough.
+    /// Start conversation mode immediately so the user's next words are treated as the command.
+    private func startListeningForExternalLaunchIfNeeded() {
+        guard mayaShortcutRouter.consumeListeningRequest() else { return }
+        Task {
+            await viewModel.requestSpeechAuthorization()
+            guard viewModel.agentState == .idle else { return }
+            viewModel.startSession()
         }
     }
 

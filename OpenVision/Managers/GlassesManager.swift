@@ -35,6 +35,7 @@ final class GlassesManager: ObservableObject {
 
     /// True while the DAT 1.0 Hey Meta launch channel is listening for this device.
     @Published private(set) var isVoiceInvocationReady = false
+    @Published private(set) var voiceInvocationStatusText = "Waiting for glasses"
 
     /// Whether camera streaming is active
     @Published var isStreaming: Bool = false
@@ -436,6 +437,7 @@ final class GlassesManager: ObservableObject {
             wearStateText = "Unknown"
             hingeStateText = "Unknown"
             thermalStateText = "Unknown"
+            voiceInvocationStatusText = "Connect glasses first"
             stopVoiceInvocations()
             return
         }
@@ -466,6 +468,7 @@ final class GlassesManager: ObservableObject {
             voiceInvocationErrorListenerToken = stream.errorPublisher.listen { [weak self] error in
                 Task { @MainActor in
                     self?.isVoiceInvocationReady = false
+                    self?.voiceInvocationStatusText = error.description
                     print("[GlassesManager] Voice invocation error: \(error.description)")
                 }
             }
@@ -473,9 +476,11 @@ final class GlassesManager: ObservableObject {
             voiceInvocationsStream = stream
             voiceInvocationDevice = deviceId
             isVoiceInvocationReady = true
+            voiceInvocationStatusText = "Ready"
             print("[GlassesManager] DAT 1.0 Hey Meta launch stream ready")
         } catch {
             isVoiceInvocationReady = false
+            voiceInvocationStatusText = error.localizedDescription
             print("[GlassesManager] Voice invocation unavailable: \(error.localizedDescription)")
         }
     }

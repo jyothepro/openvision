@@ -9,11 +9,21 @@ import MWDATCore
 final class MayaShortcutRouter: ObservableObject {
     static let shared = MayaShortcutRouter()
     @Published private(set) var voiceRouteID = UUID()
+    private var pendingListeningRequest = false
 
     private init() {}
 
-    func openVoiceAgent() {
+    func openVoiceAgent(startListening: Bool = true) {
+        pendingListeningRequest = pendingListeningRequest || startListening
         voiceRouteID = UUID()
+    }
+
+    /// External launches (App Intent or DAT Hey Meta) must survive a cold app launch, where the
+    /// request can arrive before VoiceAgentView exists. The Voice screen consumes it once ready.
+    func consumeListeningRequest() -> Bool {
+        let shouldStart = pendingListeningRequest
+        pendingListeningRequest = false
+        return shouldStart
     }
 }
 
