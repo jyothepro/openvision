@@ -73,7 +73,7 @@ final class GlassesManager: ObservableObject {
     private var deviceStateListenerToken: (any AnyListenerToken)?
     private var voiceInvocationListenerToken: (any AnyListenerToken)?
     private var voiceInvocationErrorListenerToken: (any AnyListenerToken)?
-    private var voiceInvocationsStream: VoiceInvocationsStream?
+    private var voiceInvocationsStream: MWDATCore.VoiceInvocationsStream?
     private var voiceInvocationDevice: DeviceIdentifier?
 
     // MARK: - Callbacks
@@ -403,7 +403,7 @@ final class GlassesManager: ObservableObject {
         }
     }
 
-    private func setupStandalonePhotoListeners(photo: Photo) {
+    private func setupStandalonePhotoListeners(photo: MWDATCamera.Photo) {
         standalonePhotoDataListenerToken = photo.photoDataPublisher.listen { [weak self] capture in
             Task { @MainActor in
                 let data = capture.imageData
@@ -454,7 +454,7 @@ final class GlassesManager: ObservableObject {
         stopVoiceInvocations()
 
         do {
-            let stream = try VoiceInvocationsStream(wearables: wearables)
+            let stream = try MWDATCore.VoiceInvocationsStream(wearables: wearables)
             voiceInvocationListenerToken = stream.invocationsPublisher.listen { invocation in
                 guard let launch = invocation as? LaunchApp else { return }
                 Task { @MainActor in
@@ -489,7 +489,7 @@ final class GlassesManager: ObservableObject {
         isVoiceInvocationReady = false
     }
 
-    private static func chargingText(_ state: ChargingState) -> String {
+    private static func chargingText(_ state: MWDATCore.ChargingState) -> String {
         switch state {
         case .charging: return "Charging"
         case .notCharging: return "Not charging"
@@ -497,7 +497,7 @@ final class GlassesManager: ObservableObject {
         }
     }
 
-    private static func wearText(_ state: DonState) -> String {
+    private static func wearText(_ state: MWDATCore.DonState) -> String {
         switch state {
         case .donned: return "Worn"
         case .doffed: return "Not worn"
@@ -505,7 +505,7 @@ final class GlassesManager: ObservableObject {
         }
     }
 
-    private static func hingeText(_ state: HingeState) -> String {
+    private static func hingeText(_ state: MWDATCore.HingeState) -> String {
         switch state {
         case .open: return "Open"
         case .closed: return "Closed"
