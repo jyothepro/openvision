@@ -8,6 +8,7 @@ struct VoiceSettingsView: View {
     // MARK: - Environment
 
     @EnvironmentObject var settingsManager: SettingsManager
+    @AppStorage("glassesTapControlEnabled") private var glassesTapControlEnabled = false
 
     // MARK: - Computed Properties
 
@@ -23,6 +24,11 @@ struct VoiceSettingsView: View {
 
     var body: some View {
         Form {
+            Section {
+                Toggle("Glasses Tap Control (Experimental)", isOn: $glassesTapControlEnabled)
+            } footer: {
+                Text("Use your glasses’ play/pause gesture to begin or end a conversation. For locked-phone use, select OpenAI and Apple system voice, then enable Ready Mode on the Voice screen. Ready Mode keeps the microphone active between conversations; standby audio is discarded. Music or calls can pause readiness. Device validation is still required.")
+            }
             // Wake Word Section
             Section {
                 Toggle(isOn: $settingsManager.settings.wakeWordEnabled) {

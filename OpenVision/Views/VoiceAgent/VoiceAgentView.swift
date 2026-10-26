@@ -99,7 +99,7 @@ struct VoiceAgentView: View {
         }
         // Observe TTS state changes
         .onChange(of: ttsService.isSpeaking) { _, isSpeaking in
-            viewModel.ttsSpeakingChanged(isSpeaking)
+            if !viewModel.readyModeEnabled { viewModel.ttsSpeakingChanged(isSpeaking) }
         }
         .onChange(of: kokoroTTS.isSpeaking) { _, speaking in
             viewModel.kokoroSpeakingChanged(speaking)
@@ -110,7 +110,7 @@ struct VoiceAgentView: View {
         }
         // Observe VoiceCommandService state changes
         .onChange(of: voiceCommandService.state) { _, newState in
-            viewModel.voiceStateChanged(newState)
+            if !viewModel.readyModeEnabled { viewModel.voiceStateChanged(newState) }
         }
     }
 
@@ -221,6 +221,27 @@ struct VoiceAgentView: View {
 
     private var centerContent: some View {
         VStack(spacing: 28) {
+            VStack(spacing: 8) {
+                Text(viewModel.readyModeStatus)
+                    .font(.subheadline)
+                    .foregroundStyle(Theme.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .accessibilityAddTraits(.updatesFrequently)
+                HStack {
+                    Button(viewModel.readyModeEnabled ? "Retry Ready Mode" : "Enable Ready Mode") {
+                        viewModel.enableReadyMode()
+                    }
+                    .disabled(viewModel.isSessionActive)
+                    if viewModel.readyModeEnabled {
+                        Button("Turn Off", role: .destructive) { viewModel.disableReadyMode() }
+                    }
+                }
+                Text("Keep Maya on this screen, then lock your phone. Ready mode keeps the microphone active and uses battery. Standby audio is discarded. Calls or music may pause readiness.")
+                    .font(.caption)
+                    .foregroundStyle(Theme.textSecondary)
+                    .multilineTextAlignment(.center)
+            }
+            .padding(.horizontal)
             // Heading / status prompt
             Group {
                 if viewModel.agentState == .liveVideo {
@@ -232,7 +253,7 @@ struct VoiceAgentView: View {
                             .font(.caption)
                             .foregroundColor(Theme.textSecondary)
                     }
-                } else if viewModel.agentState == .idle && settingsManager.settings.wakeWordEnabled {
+                } else if viewModel.agentState == .idle && settingsManager.settings.wakeWordEnabled && !viewModel.readyModeEnabled {
                     VStack(spacing: 8) {
                         Text("What can I see?")
                             .font(.system(size: 30, weight: .bold, design: .rounded))

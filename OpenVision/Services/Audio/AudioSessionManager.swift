@@ -3,23 +3,27 @@
 
 import AVFoundation
 
-/// Manages audio session configuration
-@MainActor
-final class AudioSessionManager {
+/// Serializes blocking audio-session operations away from the UI actor.
+/// Configuration methods contain no suspension points, so route changes stay atomic.
+actor AudioSessionManager {
     // MARK: - Singleton
 
     static let shared = AudioSessionManager()
 
     // MARK: - Properties
 
-    private let audioSession = AVAudioSession.sharedInstance()
+    private var audioSession: AVAudioSession {
+        // Catch accidental regressions to UI-thread audio configuration in debug builds.
+        assert(!Thread.isMainThread, "Audio session operations must run off the main thread")
+        return AVAudioSession.sharedInstance()
+    }
 
     /// Current audio mode
     private(set) var currentMode: AudioMode = .inactive
 
     // MARK: - Audio Modes
 
-    enum AudioMode {
+    enum AudioMode: Sendable {
         /// No audio session active
         case inactive
 
@@ -115,6 +119,19 @@ final class AudioSessionManager {
     }
 
     // MARK: - Bluetooth HFP Routing
+
+    /// Ready mode owns a real duplex audio session. Never silently arm on the phone mic.
+    func configureReadyMode() throws {
+        try audioSession.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetoothHFP])
+        try audioSession.setActive(true)
+        guard let input = findBluetoothHFPInput() else {
+            throw NSError(domain: "ReadyMode", code: 1, userInfo: [
+                NSLocalizedDescriptionKey: "Connect your glasses as a Bluetooth audio device, then retry Ready mode."
+            ])
+        }
+        try audioSession.setPreferredInput(input)
+        currentMode = .voiceChat
+    }
 
     /// Configure the audio session for the glasses' Bluetooth HFP mic + speaker.
     /// Returns `true` only if an HFP input was actually found and selected (i.e. the glasses are

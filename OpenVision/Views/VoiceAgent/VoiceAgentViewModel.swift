@@ -9,6 +9,67 @@
 
 import SwiftUI
 import Speech
+import MediaPlayer
+import Combine
+
+/// Bridges accessory media gestures to the Voice screen. This registers controls only;
+/// it does not manufacture background runtime or guarantee delivery while iOS suspends us.
+@MainActor
+private final class GlassesTapControl {
+    enum Command { case play, stop, toggle }
+
+    private var targets: [(MPRemoteCommand, Any)] = []
+    private var handler: ((Command) -> Void)?
+    private var registrationID = UUID()
+
+    func start(handler: @escaping (Command) -> Void) {
+        self.handler = handler
+        guard targets.isEmpty else { return }
+        let center = MPRemoteCommandCenter.shared()
+        register(center.playCommand, as: .play)
+        register(center.pauseCommand, as: .stop)
+        register(center.stopCommand, as: .stop)
+        register(center.togglePlayPauseCommand, as: .toggle)
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = [
+            MPMediaItemPropertyTitle: "Maya Voice Assistant",
+            MPMediaItemPropertyArtist: "Tap to begin or end a conversation",
+            MPNowPlayingInfoPropertyIsLiveStream: true,
+            MPNowPlayingInfoPropertyPlaybackRate: 0.0
+        ]
+    }
+
+    func update(isActive: Bool) {
+        guard !targets.isEmpty else { return }
+        var info = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
+        info[MPNowPlayingInfoPropertyPlaybackRate] = isActive ? 1.0 : 0.0
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+    }
+
+    private func register(_ remote: MPRemoteCommand, as command: Command) {
+        let id = registrationID
+        remote.isEnabled = true
+        let target = remote.addTarget { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self, self.registrationID == id else { return }
+                self.handler?(command)
+            }
+            return .success
+        }
+        targets.append((remote, target))
+    }
+
+    func stop() {
+        guard !targets.isEmpty else { return }
+        registrationID = UUID()
+        for (remote, target) in targets {
+            remote.removeTarget(target)
+            remote.isEnabled = false
+        }
+        targets.removeAll()
+        handler = nil
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+    }
+}
 
 @MainActor
 final class VoiceAgentViewModel: ObservableObject {
@@ -39,6 +100,15 @@ final class VoiceAgentViewModel: ObservableObject {
     @Published var isLiveVideoMode = false
     /// True when voice recognition is ready (audio engine running)
     @Published var isVoiceReady = false
+    @Published private(set) var readyModeEnabled = false
+    @Published private(set) var readyModeStatus = "Ready mode off"
+    private var standbyEngine: AVAudioEngine?
+    private var readyTask: Task<Void, Never>?
+    private var sessionStartupTask: Task<Void, Never>?
+    private var commandTask: Task<Void, Never>?
+    private var readyObservers: Set<AnyCancellable> = []
+    private var readyInterrupted = false
+    private var voiceScreenVisible = false
     /// True while a POV demo recording (glasses video + mic audio) is in progress.
     @Published var isRecording = false
     /// Transient status shown after a recording finishes ("Saved to Photos" / a failure). Auto-clears.
@@ -50,6 +120,8 @@ final class VoiceAgentViewModel: ObservableObject {
     private var lastProcessedCommand = ""
     private var lastProcessedAt = Date.distantPast
     private var hasRequestedSpeechAuth = false
+    private var wakeWordStartupTask: Task<Void, Never>?
+    private let tapControl = GlassesTapControl()
 
     /// The live-video backend currently driving audio/video (Gemini or OpenAI Realtime).
     /// Set when live video mode starts; used by stop/callbacks so both backends route correctly.
@@ -108,6 +180,16 @@ final class VoiceAgentViewModel: ObservableObject {
     // MARK: - View lifecycle
 
     func onAppear() {
+        voiceScreenVisible = true
+        installReadyObservers()
+        if UserDefaults.standard.bool(forKey: "glassesTapControlEnabled") {
+            tapControl.start { [weak self] command in
+                self?.handleGlassesMediaCommand(command)
+            }
+        } else {
+            tapControl.stop()
+        }
+        tapControl.update(isActive: isSessionActive)
         setupVoiceCommandService()
         setupGlassesCallbacks()
         preloadLocalModelIfNeeded()
@@ -120,10 +202,196 @@ final class VoiceAgentViewModel: ObservableObject {
     }
 
     func onDisappear() {
+        voiceScreenVisible = false
+        disableReadyMode()
+        readyObservers.removeAll()
+        tapControl.stop()
+        wakeWordStartupTask?.cancel()
+        wakeWordStartupTask = nil
         voiceCommandService.stopListening()
     }
 
     // MARK: - Observed state changes (forwarded from the view's onChange hooks)
+
+    private func handleGlassesMediaCommand(_ command: GlassesTapControl.Command) {
+        guard UserDefaults.standard.bool(forKey: "glassesTapControlEnabled") else { return }
+        guard !readyModeEnabled || (!readyInterrupted && (standbyEngine?.isRunning == true || isSessionActive)) else { return }
+        // Do not start overlapping backend connections while the first tap is connecting.
+        guard agentState != .connecting else { return }
+        let shouldStop = command == .stop || (command == .toggle && isSessionActive)
+        if shouldStop {
+            guard isSessionActive else { return }
+            performFullStop()
+            stopSession()
+        } else if !isSessionActive {
+            guard voiceCommandService.authorizationStatus == .authorized else {
+                errorMessage = "Open Voice and allow speech recognition before using glasses tap control."
+                return
+            }
+            startSession(playActivationSound: true)
+        }
+    }
+
+    /// Explicit consent is required each time: standby holds the mic, but discards every buffer.
+    func enableReadyMode() {
+        guard voiceScreenVisible, UIApplication.shared.applicationState == .active else { return }
+        guard settingsManager.settings.aiBackend == .openAI,
+              settingsManager.settings.isOpenAIConfigured,
+              settingsManager.settings.ttsEngine == .appleSystem else {
+            readyModeStatus = "Select OpenAI and Apple system voice in Settings first."
+            return
+        }
+        guard !isSessionActive, !isLiveVideoMode else {
+            readyModeStatus = "End the conversation before enabling Ready mode."
+            return
+        }
+        UserDefaults.standard.set(true, forKey: "glassesTapControlEnabled")
+        readyModeEnabled = true
+        readyInterrupted = false
+        tapControl.start { [weak self] in self?.handleGlassesMediaCommand($0) }
+        armReadyStandby()
+    }
+
+    func disableReadyMode() {
+        let wasEnabled = readyModeEnabled
+        readyModeEnabled = false
+        readyTask?.cancel()
+        readyTask = nil
+        stopStandbyEngine()
+        readyModeStatus = "Ready mode off"
+        if wasEnabled {
+            tapControl.stop()
+            performFullStop()
+            stopSession()
+            voiceCommandService.stopListening()
+            Task { try? await AudioSessionManager.shared.deactivate() }
+        }
+    }
+
+    private func stopStandbyEngine() {
+        standbyEngine?.inputNode.removeTap(onBus: 0)
+        standbyEngine?.stop()
+        standbyEngine = nil
+    }
+
+    private func armReadyStandby() {
+        guard readyModeEnabled, !readyInterrupted, !isSessionActive, voiceScreenVisible else { return }
+        readyTask?.cancel()
+        wakeWordStartupTask?.cancel()
+        readyModeStatus = "Preparing Ready mode…"
+        voiceCommandService.stopListening()
+        stopStandbyEngine()
+        readyTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                guard voiceCommandService.authorizationStatus == .authorized else {
+                    throw NSError(domain: "ReadyMode", code: 2, userInfo: [NSLocalizedDescriptionKey: "Allow speech recognition on the Voice screen first."])
+                }
+                guard await AVAudioApplication.requestRecordPermission() else {
+                    throw NSError(domain: "ReadyMode", code: 3, userInfo: [NSLocalizedDescriptionKey: "Allow microphone access in iPhone Settings."])
+                }
+                try Task.checkCancellation()
+                try await AudioSessionManager.shared.configureReadyMode()
+                try Task.checkCancellation()
+                guard readyModeEnabled, !readyInterrupted, !isSessionActive else { return }
+                let engine = AVAudioEngine()
+                let input = engine.inputNode
+                let format = input.outputFormat(forBus: 0)
+                guard format.sampleRate > 0, format.channelCount > 0 else {
+                    throw VoiceCommandError.audioEngineUnavailable
+                }
+                if let reason = OVCatchException({
+                    input.installTap(onBus: 0, bufferSize: 1024, format: format) { _, _ in
+                        // Standby audio is never retained, transcribed, or transmitted.
+                    }
+                }) {
+                    throw NSError(domain: "ReadyMode", code: 4, userInfo: [NSLocalizedDescriptionKey: reason])
+                }
+                standbyEngine = engine
+                engine.prepare()
+                try engine.start()
+                readyModeStatus = "Ready — lock your phone and tap your glasses"
+                tapControl.start { [weak self] in self?.handleGlassesMediaCommand($0) }
+                tapControl.update(isActive: false)
+            } catch is CancellationError {
+                // A newer arm/stop request owns the state.
+            } catch {
+                guard !Task.isCancelled else { return }
+                stopStandbyEngine()
+                readyInterrupted = true
+                readyModeStatus = "Ready paused — \(error.localizedDescription)"
+            }
+        }
+    }
+
+    private func pauseReadyMode(_ reason: String) {
+        guard readyModeEnabled else { return }
+        readyInterrupted = true
+        tapControl.stop()
+        readyTask?.cancel()
+        stopStandbyEngine()
+        performFullStop()
+        stopSession()
+        voiceCommandService.stopListening()
+        readyModeStatus = "Ready paused — \(reason)"
+    }
+
+    private func installReadyObservers() {
+        guard readyObservers.isEmpty else { return }
+        // These transitions must run while the screen is locked, independently of SwiftUI's
+        // rendering/onChange cycle. Publishers and this orchestrator are main-actor owned.
+        ttsService.$isSpeaking.dropFirst().sink { [weak self] speaking in
+            guard let self, self.readyModeEnabled else { return }
+            self.ttsSpeakingChanged(speaking)
+        }.store(in: &readyObservers)
+        voiceCommandService.$state.dropFirst().sink { [weak self] state in
+            guard let self, self.readyModeEnabled else { return }
+            self.voiceStateChanged(state)
+        }.store(in: &readyObservers)
+        NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)
+            .sink { [weak self] notification in
+                let type = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt
+                let options = notification.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt ?? 0
+                Task { @MainActor [weak self] in
+                    guard let self, self.readyModeEnabled else { return }
+                    if type == AVAudioSession.InterruptionType.began.rawValue {
+                        self.pauseReadyMode("audio interrupted")
+                    } else if type == AVAudioSession.InterruptionType.ended.rawValue,
+                              AVAudioSession.InterruptionOptions(rawValue: options).contains(.shouldResume) {
+                        self.readyInterrupted = false
+                        self.armReadyStandby()
+                    }
+                }
+            }.store(in: &readyObservers)
+        NotificationCenter.default.publisher(for: AVAudioSession.routeChangeNotification)
+            .sink { [weak self] notification in
+                let reason = notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt
+                Task { @MainActor [weak self] in
+                    guard let self, self.readyModeEnabled else { return }
+                    if reason == AVAudioSession.RouteChangeReason.oldDeviceUnavailable.rawValue {
+                        self.pauseReadyMode("glasses disconnected; reconnect and retry")
+                    } else if reason == AVAudioSession.RouteChangeReason.newDeviceAvailable.rawValue,
+                              self.readyInterrupted {
+                        self.readyInterrupted = false
+                        self.armReadyStandby()
+                    }
+                }
+            }.store(in: &readyObservers)
+        NotificationCenter.default.publisher(for: AVAudioSession.mediaServicesWereResetNotification)
+            .sink { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.pauseReadyMode("audio services restarted; retry Ready mode")
+                }
+            }.store(in: &readyObservers)
+        NotificationCenter.default.publisher(for: .AVAudioEngineConfigurationChange)
+            .sink { [weak self] notification in
+                let engine = notification.object as? AVAudioEngine
+                Task { @MainActor [weak self] in
+                    guard let self, let engine, engine === self.standbyEngine else { return }
+                    self.pauseReadyMode("audio route changed; retry Ready mode")
+                }
+            }.store(in: &readyObservers)
+    }
 
     func ttsSpeakingChanged(_ isSpeaking: Bool) {
         if isSpeaking {
@@ -175,6 +443,7 @@ final class VoiceAgentViewModel: ObservableObject {
 
     /// Control thinking sound based on agent state.
     func agentStateChanged(_ newState: AgentState) {
+        tapControl.update(isActive: isSessionActive)
         if newState == .thinking || newState == .toolRunning {
             soundService.startThinkingSound()
         } else {
@@ -203,6 +472,10 @@ final class VoiceAgentViewModel: ObservableObject {
             // face/camera command: the restart flipped to .idle during .thinking and killed the
             // session, so the post-reply audio rebuild never ran.)
             if isSessionActive && agentState == .listening {
+                if readyModeEnabled {
+                    stopSession()
+                    return
+                }
                 print("[VoiceAgent] Voice service idle, stopping session")
                 isSessionActive = false
                 agentState = .idle
@@ -253,7 +526,13 @@ final class VoiceAgentViewModel: ObservableObject {
         }
     }
 
-    func startSession() {
+    func startSession(playActivationSound: Bool = false) {
+        guard !isSessionActive else { return }
+        if readyModeEnabled {
+            guard !readyInterrupted else { return }
+            readyTask?.cancel()
+            readyModeStatus = "Ready — conversation active"
+        }
         // Check configuration
         guard settingsManager.settings.isCurrentBackendConfigured else {
             errorMessage = "Please configure \(settingsManager.settings.aiBackend.displayName) in Settings"
@@ -261,6 +540,7 @@ final class VoiceAgentViewModel: ObservableObject {
         }
 
         isSessionActive = true
+        tapControl.update(isActive: true)
         agentState = .connecting
 
         // Model memory follows the History conversation window (5-min inactivity), NOT the wake
@@ -272,12 +552,20 @@ final class VoiceAgentViewModel: ObservableObject {
             AppleFoundationService.shared.resetContext()
         }
 
-        // Configure audio routing for glasses if registered
-        configureAudioForGlasses()
-
-        // Connect to AI backend
-        Task {
+        // Configure routing before connecting or starting speech recognition.
+        sessionStartupTask?.cancel()
+        sessionStartupTask = Task {
             do {
+                if readyModeEnabled {
+                    // Keep standby recording through connection setup. Reusing its route
+                    // avoids dropping background audio until recognition is ready to take over.
+                    if standbyEngine?.isRunning != true {
+                        try await AudioSessionManager.shared.configureReadyMode()
+                    }
+                } else {
+                    await configureAudioForGlasses()
+                }
+                guard isSessionActive, !Task.isCancelled else { return }
                 switch settingsManager.settings.aiBackend {
                 case .openClaw:
                     try await OpenClawService.shared.connect()
@@ -309,25 +597,33 @@ final class VoiceAgentViewModel: ObservableObject {
                     )
                 }
 
+                try Task.checkCancellation()
+                guard isSessionActive else { return }
                 agentState = .listening
                 userTranscript = ""
                 aiTranscript = ""
 
                 // Start voice command listening for speech capture
                 if voiceCommandService.authorizationStatus == .authorized {
+                    stopStandbyEngine()
                     if !voiceCommandService.isListening {
-                        try? voiceCommandService.startListening()
+                        try voiceCommandService.startListening()
                     }
                     // Put in listening mode (not waiting for wake word)
                     voiceCommandService.enterConversationMode()
+                    if playActivationSound { soundService.playWakeWordSound() }
                 } else {
-                    errorMessage = "Speech recognition not authorized"
+                    throw VoiceCommandError.notAuthorized
                 }
 
+            } catch is CancellationError {
+                return
             } catch {
+                guard !Task.isCancelled else { return }
                 errorMessage = "Failed to connect: \(error.localizedDescription)"
                 isSessionActive = false
                 agentState = .idle
+                if readyModeEnabled { pauseReadyMode("conversation could not start; retry") }
             }
         }
     }
@@ -345,24 +641,24 @@ final class VoiceAgentViewModel: ObservableObject {
     /// Attempting glasses is what makes iOS expose the HFP mic — so we try it directly rather than
     /// pre-checking availability (which can't see HFP until it's allowed). Returns true on glasses.
     @discardableResult
-    private func applyPreferredAudioRoute() -> Bool {
+    private func applyPreferredAudioRoute() async -> Bool {
         // Never pick the glasses HFP mic while the camera is streaming: video saturates the
         // Bluetooth link, so the SCO audio channel can't be serviced. configureForGlasses() can
         // still "succeed" in that state, but the mic is deaf — commands are never transcribed
         // (seen when recording starts the stream before a wake-word session). Phone mic instead.
         if settingsManager.settings.preferGlassesMic, glassesManager.isRegistered,
            !glassesManager.isStreaming,
-           (try? AudioSessionManager.shared.configureForGlasses()) == true {
+           (try? await AudioSessionManager.shared.configureForGlasses()) == true {
             return true
         }
         // Glasses mic off, glasses not connected as audio, or no HFP input available → phone.
         // Loud speaker so spoken replies are audible (not the quiet earpiece).
         print("[VoiceAgent] Using iPhone mic + speaker (glasses mic off or unavailable)")
-        try? AudioSessionManager.shared.configureForPhone()
+        try? await AudioSessionManager.shared.configureForPhone()
         return false
     }
 
-    private func configureAudioForGlasses() {
+    private func configureAudioForGlasses() async {
         // If we're already on the glasses' Bluetooth (HFP) route and still listening, do NOT tear
         // the audio session down and re-activate it. That re-activation renegotiates the HFP SCO
         // link, which the glasses render as a "Bluetooth connecting/closing" blip — heard on every
@@ -370,18 +666,24 @@ final class VoiceAgentViewModel: ObservableObject {
         // churn). Skipping it keeps SCO stable, so the wake chime plays cleanly each time.
         if settingsManager.settings.preferGlassesMic, glassesManager.isRegistered,
            !glassesManager.isStreaming,   // HFP is deaf while the camera streams — reconfigure to phone
-           AudioSessionManager.shared.isBluetoothHFPActive, voiceCommandService.isListening {
+           voiceCommandService.isListening,
+           await AudioSessionManager.shared.isBluetoothHFPActive {
             return
         }
         let wasListening = voiceCommandService.isListening
         if wasListening { voiceCommandService.stopListening() }
-        applyPreferredAudioRoute()
-        if wasListening {
+        await applyPreferredAudioRoute()
+        if wasListening, !Task.isCancelled {
             try? voiceCommandService.startListening()
         }
     }
 
     func stopSession() {
+        commandTask?.cancel()
+        sessionStartupTask?.cancel()
+        sessionStartupTask = nil
+        isSessionActive = false
+        tapControl.update(isActive: false)
         // If in live video mode, stop it first
         if isLiveVideoMode {
             Task {
@@ -410,6 +712,7 @@ final class VoiceAgentViewModel: ObservableObject {
                 print("[VoiceAgent] Stopping glasses stream...")
                 await glassesManager.stopStreaming()
             }
+            if readyModeEnabled, !readyInterrupted { armReadyStandby() }
         }
 
         // Stop any ongoing TTS
@@ -421,7 +724,9 @@ final class VoiceAgentViewModel: ObservableObject {
         agentState = .idle
 
         // Handle voice command service based on wake word setting
-        if settingsManager.settings.wakeWordEnabled {
+        if readyModeEnabled {
+            voiceCommandService.stopListening()
+        } else if settingsManager.settings.wakeWordEnabled {
             // Exit conversation mode but keep listening for wake word
             voiceCommandService.exitConversationMode()
         } else {
@@ -439,6 +744,7 @@ final class VoiceAgentViewModel: ObservableObject {
     /// quiet back to wake-word listening. The recognizer buffer is already reset by
     /// VoiceCommandService (so the stale transcript can't re-fire); here we just halt + end the turn.
     private func performFullStop() {
+        commandTask?.cancel()
         // "Hi Maya stop" is an interruption too: the user cut the reply off. Close the turn
         // deterministically before stopping the engines — delivered-then-stopped turns finish
         // here (markSpokeDone is gated on firstAudio); a stop mid-thinking leaves the turn open
@@ -478,6 +784,7 @@ final class VoiceAgentViewModel: ObservableObject {
         currentToolName = nil
         isSessionActive = false
         agentState = .idle
+        if readyModeEnabled { armReadyStandby() }
     }
 
     // MARK: - Voice Command Setup
@@ -614,7 +921,8 @@ final class VoiceAgentViewModel: ObservableObject {
             self.historyAwaitingReply = true
 
             // Send command to AI backend
-            Task {
+            if self.readyModeEnabled { self.commandTask?.cancel() }
+            self.commandTask = Task {
                 await self.sendCommand(command)
             }
         }
@@ -795,19 +1103,26 @@ final class VoiceAgentViewModel: ObservableObject {
 
     /// Start listening for wake word
     private func startWakeWordListening() {
+        guard !readyModeEnabled else { return }
         guard settingsManager.settings.wakeWordEnabled else { return }
         guard voiceCommandService.authorizationStatus == .authorized else { return }
 
-        // Configure audio for glasses before starting to listen
-        configureAudioForGlasses()
+        wakeWordStartupTask?.cancel()
+        wakeWordStartupTask = Task { [weak self] in
+            guard let self else { return }
+            await configureAudioForGlasses()
+            guard !Task.isCancelled, settingsManager.settings.wakeWordEnabled else { return }
 
-        do {
-            try voiceCommandService.startListening()
-            isVoiceReady = true
-            print("[VoiceAgent] Started wake word listening - READY")
-        } catch {
-            print("[VoiceAgent] Failed to start listening: \(error)")
-            errorMessage = error.localizedDescription
+            do {
+                if !voiceCommandService.isListening {
+                    try voiceCommandService.startListening()
+                }
+                isVoiceReady = true
+                print("[VoiceAgent] Started wake word listening - READY")
+            } catch {
+                print("[VoiceAgent] Failed to start listening: \(error)")
+                errorMessage = error.localizedDescription
+            }
         }
     }
 
@@ -962,6 +1277,7 @@ final class VoiceAgentViewModel: ObservableObject {
                 agentState = isSessionActive ? .listening : .idle
             }
         } catch {
+            guard !Task.isCancelled else { return }
             errorMessage = "Failed to send command: \(error.localizedDescription)"
             agentState = isSessionActive ? .listening : .idle
         }
@@ -971,6 +1287,10 @@ final class VoiceAgentViewModel: ObservableObject {
 
     /// Start live video mode - Gemini handles both audio and video
     private func startLiveVideoMode() async {
+        guard !readyModeEnabled else {
+            speakResponse("Turn off Ready mode on your phone before starting live video.")
+            return
+        }
         guard !isLiveVideoMode else {
             print("[VoiceAgent] Already in live video mode")
             return
@@ -1114,7 +1434,7 @@ final class VoiceAgentViewModel: ObservableObject {
         // streams continuously, so force the phone mic + speaker for the whole session and
         // rebuild recognition on that route. The preferred route is restored on stop.
         voiceCommandService.stopListening()
-        try? AudioSessionManager.shared.configureForPhone()
+        try? await AudioSessionManager.shared.configureForPhone()
         do {
             try voiceCommandService.startListening()
         } catch {
@@ -1523,7 +1843,7 @@ final class VoiceAgentViewModel: ObservableObject {
         // Local live mode forced the phone mic (HFP dies during camera streaming) and its STT
         // may still be running — stop it so the restart below picks up the preferred route.
         if voiceCommandService.isListening { voiceCommandService.stopListening() }
-        applyPreferredAudioRoute()
+        await applyPreferredAudioRoute()
 
         // Always restart VoiceCommandService for wake word detection
         do {

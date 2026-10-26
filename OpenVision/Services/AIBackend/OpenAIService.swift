@@ -32,6 +32,7 @@ final class OpenAIService: ObservableObject {
 
     /// Send a prompt (optionally with an image) and deliver the reply via `onAgentMessage`.
     func sendMessage(_ text: String, imageData: Data? = nil) async throws {
+        try Task.checkCancellation()
         guard settings.isOpenAIConfigured else { throw OpenAIError.notConfigured }
         // Record the utterance for the tool registry's relative-time guard.
         NativeToolContext.shared.set(text)
@@ -105,6 +106,7 @@ final class OpenAIService: ObservableObject {
             request.timeoutInterval = 60
 
             let (data, response) = try await Self.dataWithRetry(for: request)
+            try Task.checkCancellation()
             guard let http = response as? HTTPURLResponse else { throw OpenAIError.noResponse }
             guard (200...299).contains(http.statusCode) else {
                 let detail = Self.errorMessage(from: data) ?? "HTTP \(http.statusCode)"
@@ -117,6 +119,7 @@ final class OpenAIService: ObservableObject {
             if let toolCalls = message["tool_calls"] as? [[String: Any]], !toolCalls.isEmpty {
                 messages.append(message)   // the assistant turn carrying tool_calls
                 for call in toolCalls {
+                    try Task.checkCancellation()
                     let id = call["id"] as? String ?? ""
                     let fn = call["function"] as? [String: Any]
                     let toolName = fn?["name"] as? String ?? ""
@@ -134,6 +137,7 @@ final class OpenAIService: ObservableObject {
                         result = await NativeToolRegistry.shared.execute(name: toolName, args: args)
                     }
                     messages.append(["role": "tool", "tool_call_id": id, "content": result])
+                    try Task.checkCancellation()
                 }
                 continue
             }
@@ -142,6 +146,7 @@ final class OpenAIService: ObservableObject {
             guard let reply = (message["content"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines), !reply.isEmpty else {
                 throw OpenAIError.emptyReply
             }
+            try Task.checkCancellation()
             ConversationContext.shared.record(user: text, assistant: reply)
             onAgentMessage?(reply)
             return
