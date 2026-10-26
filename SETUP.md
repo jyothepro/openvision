@@ -132,7 +132,7 @@ APP_LINK_URL_SCHEME = openvision
 The Meta Wearables Device Access Toolkit (DAT) SDK is required for glasses integration.
 
 **Nothing to do — this is already wired up.** `project.yml` declares the SDK
-(`https://github.com/facebook/meta-wearables-dat-ios`, pinned to `0.4.0`) and pulls in
+(`https://github.com/facebook/meta-wearables-dat-ios`, pinned to `1.0.1`) and pulls in
 `MWDATCore` + `MWDATCamera`, so `xcodegen generate` and a build resolve it for you.
 
 > The pin is deliberate: 0.6.0 made `StreamSession.init` inaccessible and 0.7.0 renamed the
@@ -253,6 +253,76 @@ Once the app is running:
 2. Select **Gemini Live**
 3. Tap **Gemini Settings**
 4. Enter your [Gemini API key](https://aistudio.google.com/app/apikey)
+
+### Grok Setup
+
+1. Go to **Settings → AI Backend**
+2. Select **Grok**
+3. Tap **Grok Settings** and choose how to connect:
+   - **SuperGrok Subscription**: tap **Sign in with SuperGrok** and log in with your X/xAI account
+   - **API Key**: paste a key from [console.x.ai](https://console.x.ai)
+4. Pick a model (non-reasoning models answer fastest)
+
+To hear replies in a Grok voice, go to **Settings → Voice Control → Speech Engine**, choose
+**Grok (natural, cloud)**, and pick a voice. The ▶ next to each voice plays a sample. It uses
+the same sign-in or key as the backend.
+
+> SuperGrok sign-in works the way the Grok CLI signs in; requests then go to xAI's public API.
+
+### Hermes Setup
+
+OpenVision talks to your [Hermes Agent](https://github.com/NousResearch/hermes-agent) through
+its OpenAI-compatible API server. Hermes answers with its own tools, memory and skills; OpenVision
+asks for short spoken replies and sends photos from the glasses along with your question.
+
+On the machine running Hermes, add to `~/.hermes/.env`:
+
+```bash
+API_SERVER_ENABLED=true
+API_SERVER_KEY=<a long random secret>     # e.g. openssl rand -hex 32
+# Leave API_SERVER_HOST at its default (127.0.0.1) when using one of the options below.
+```
+
+Then restart `hermes gateway`. The API server listens on port 8642.
+
+> **The key gives full access to Hermes' tools, including terminal commands on that machine.**
+> Don't expose port 8642 to the internet as plain http. Pick one of:
+> - **Tailscale** (simplest): install it on the server and the iPhone, keep `API_SERVER_HOST` at
+>   its default (`127.0.0.1`), and run `tailscale serve --bg 8642` on the server. Use the
+>   `https://<server>.<tailnet>.ts.net` address it prints; only your own devices can reach it.
+> - **An https reverse proxy** (Caddy, nginx, Cloudflare Tunnel) in front of `127.0.0.1:8642`,
+>   and use `https://hermes.example.com`.
+
+In OpenVision:
+
+1. Go to **Settings → AI Backend → Hermes Settings** and keep **Connect With: API Key**
+2. Enter the server address (add `/p/<profile>` for a named Hermes profile) and the `API_SERVER_KEY`
+3. Tap **Test Connection**, then select **Hermes** as the backend
+
+#### Or: sign in with the web UI's username and password
+
+If your Hermes web UI (`hermes dashboard`) is set up with a username and password, OpenVision
+can sign in to it instead and chat the way the Hermes Desktop app does:
+
+1. On the server, run the dashboard on a reachable address with the username/password provider
+   (see Hermes' [web dashboard guide](https://github.com/NousResearch/hermes-agent/blob/main/website/docs/user-guide/features/web-dashboard.md#usernamepassword-provider-no-oauth-idp)).
+   Hermes recommends this login only on a trusted network or VPN, so reach it over Tailscale or https.
+2. In OpenVision: **Hermes Settings → Connect With: Username & Password**, enter the web UI address,
+   and tap **Sign in to Hermes**. You log in on Hermes' own page; OpenVision keeps only the tokens.
+3. Select **Hermes** as the backend.
+
+Each OpenVision conversation (see History; a new one starts after a few quiet minutes or with +)
+is its own Hermes chat, titled by Hermes with an "OpenVision: " prefix so they're easy to find.
+
+Hermes' slash commands and skills work by voice: say "Ok Vision, slash usage", "slash title Trip
+planning", or a skill by name. Spoken names are matched to your server's commands and, for
+`/model`, to its model ids ("slash model GPT five point five" → `gpt-5.5`; a version number is
+never guessed). "slash new" starts a new chat.
+
+When Hermes asks for approval to run something, OpenVision reads the request aloud and you answer
+yes or no; its clarifying questions are answered by voice too. Requests for passwords, secrets or
+sudo are always declined. This mode uses the protocol of Hermes' own apps, which isn't a documented
+public API, so a Hermes update can break it; the API key mode is the stable option.
 
 ---
 

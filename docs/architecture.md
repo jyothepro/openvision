@@ -6,19 +6,23 @@ How OpenVision is organized, and the seams to use when extending it.
 OpenVision/
 ├── App/                 App entry (OpenVisionApp)
 ├── Config/              Constants + xcconfig-backed configuration (zero hardcoding)
-├── Managers/            App-wide state: SettingsManager, GlassesManager
+├── Managers/            App-wide state: SettingsManager (API keys in the Keychain), GlassesManager
 ├── Models/              Value types & settings enums (AIBackendType, TTSEngineType, …)
 ├── Services/            One folder per domain — the backbone of the app
-│   ├── AIBackend/       AIBackend protocol + registry + conformances, OpenAIService
+│   ├── AIBackend/       AIBackend protocol + registry + conformances, OpenAIService,
+│   │                    ChatGPTSubscription (ChatGPT plan backend), GrokService,
+│   │                    HermesService (your Hermes Agent server),
+│   │                    CloudChat (prompt + tools + loop shared by cloud chat backends)
 │   ├── AppleFoundation/ Apple Intelligence backend (+ its native Tool wrappers)
 │   ├── Audio/           Audio session, capture, playback, sounds
 │   ├── GeminiLive/      Gemini Live websocket backend + Gemini vision
 │   ├── GemmaLocal/      On-device MLX models (Gemma 4, SmolVLM2, FastVLM, Qwen)
 │   ├── LocalAgent/      Shared routing brain for on-device models (JSON-in-text)
 │   ├── NativeTools/     Productivity tools (timer, reminder, calendar, note, …)
+│   ├── OAuth/           Subscription sign-in: PKCE, loopback redirect, Keychain tokens
 │   ├── OpenAIRealtime/  OpenAI Realtime (live audio/video)
 │   ├── OpenClaw/        OpenClaw agentic backend
-│   ├── TTS/             Apple TTS + Kokoro neural TTS
+│   ├── TTS/             Apple TTS, Kokoro (on-device) and cloud voices (Grok, OpenAI)
 │   ├── Voice/           Wake word + speech recognition (VoiceCommandService)
 │   ├── Vision/          Face recognition (Apple Vision)
 │   └── Web/             Web search (Tavily / DuckDuckGo)
@@ -41,6 +45,12 @@ OpenVisionTests/         Unit tests (pure logic: date resolution, routing, chunk
   - `NativeTool` — one productivity tool; the registry adapts it to every backend's
     function-calling format ([docs/native-tools.md](native-tools.md)).
   - `LiveVideoService` — realtime audio/video backends (Gemini Live, OpenAI Realtime).
+  - `NeuralSpeechEngine` — Kokoro and the cloud voices (`CloudTTSService`); the ViewModel
+    talks to `NeuralSpeech.active(settings)` instead of naming an engine.
+- **Subscription sign-in** (`Services/OAuth`) is provider-agnostic: an `OAuthProvider` value
+  holds the client id, endpoints and loopback redirect, `OAuthSignIn.signIn(_:)` runs the flow,
+  and `OAuthTokenStore.shared.freshCredentials(for:)` hands back a refreshed token. A backend
+  that supports a subscription only needs its provider config.
 - **Services are singletons** (`Service.shared`) orchestrated from the ViewModel. Pure logic
   that needs testing lives in enums/free functions (`NativeToolSupport`, `LocalAgent`,
   `TextChunking`) so tests never touch hardware, network, or models.
@@ -67,7 +77,11 @@ whichever backend the user selected through it — no downcasts, no per-backend 
 2. Conform it to `AIBackend` in `AIBackendConformances.swift` (thin adapter if names differ).
 3. Add a case to `AIBackendType` (Models/AppSettings.swift) and one line to `AIBackendRegistry`.
 4. If it should run the productivity tools, wire its function-calling loop to
-   `NativeToolRegistry.shared` (see how OpenAI/Gemini do it).
+   `NativeToolRegistry.shared` (see how OpenAI/Gemini do it). An OpenAI-compatible Chat
+   Completions API can call `CloudChat.chatCompletionsReply` and get the prompt, history,
+   photos, web search and tools for free; `GrokService` is the smallest example. For an agent
+   that runs its own tools, pass `offerTools: false`, `maxTokens: nil` and its own `system`
+   prompt, as `HermesService` does.
 
 **Adding a native tool:** see [docs/native-tools.md](native-tools.md) — implement `NativeTool`,
 register it, add the Apple `Tool` wrapper, and mention it in the backend prompts.

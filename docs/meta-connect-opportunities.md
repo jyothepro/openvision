@@ -2,6 +2,12 @@
 
 Research date: 2026-09-24
 
+## Update: DAT 1.0.1 and Muse (2026-10-26)
+
+OpenVision now pins DAT **1.0.1**. The [tagged changelog](https://github.com/facebook/meta-wearables-dat-ios/blob/1.0.1/CHANGELOG.md) reports no developer-facing changes in this patch. The feature opportunities below come from 1.0.0, not new APIs in 1.0.1. This branch already integrates device-health snapshots, standalone photo capture, and Hey Meta launch handling. Experimental speech, input, and motion modules remain candidates for separate work and require checking device support and publishing restrictions.
+
+**Muse Code** support supplies DAT development tooling and documentation; it does not supply an assistant backend to the running app. **Muse Spark** is separately accessible through Meta Model API. Based on [Meta's quickstart](https://dev.meta.ai/docs/quickstart), the existing OpenAI-compatible API-key path is a candidate integration: base URL `https://api.meta.ai/v1`, model `muse-spark-1.3`, and a Meta Model API key. This configuration has not been tested in OpenVision. Use the app's speech pipeline; this does not establish a native Realtime voice integration.
+
 ## Bottom line
 
 Yes. The useful announcement is **Wearables Device Access Toolkit (DAT) 1.0**, not the broader VR/Horizon news. OpenVision is already a native iOS DAT app, so it can keep its existing app, AI backends, and App Store identity while adopting new glasses capabilities. The highest-value work is to (1) evaluate the 0.9.0 → 1.0 SDK upgrade, (2) replace or complement the app-owned wake-word path with system-level **“Hey Meta” invocation and DAT speech/ASR**, and (3) add an optional display experience for Meta Ray-Ban Display. Motion/gesture input and Meta's upcoming discovery surfaces are good follow-ons.

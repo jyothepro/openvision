@@ -29,7 +29,7 @@ protocol AIBackend: AnyObject {
 
     /// On-device routing brain, if this backend has one (Gemma, Apple Intelligence).
     var localLLM: LocalTextLLM? { get }
-    /// Whether sendMessage accepts imageData (OpenClaw, OpenAI, Gemma).
+    /// Whether sendMessage accepts imageData (OpenClaw, OpenAI, Grok, Hermes, Gemma).
     var supportsImageInput: Bool { get }
 }
 
@@ -46,6 +46,8 @@ enum AIBackendRegistry {
         case .openClaw: return OpenClawService.shared
         case .geminiLive: return GeminiLiveService.shared
         case .openAI: return OpenAIService.shared
+        case .grok: return GrokService.shared
+        case .hermes: return HermesService.shared
         case .appleFoundation: return AppleFoundationService.shared
         case .localGemma: return GemmaLocalService.shared
         }

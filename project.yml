@@ -11,8 +11,8 @@ options:
 
 settings:
   base:
-    MARKETING_VERSION: "2.13.0"
-    CURRENT_PROJECT_VERSION: "14"
+    MARKETING_VERSION: "2.14.0"
+    CURRENT_PROJECT_VERSION: "15"
     SWIFT_VERSION: "5.9"
     DEVELOPMENT_TEAM: ${DEVELOPMENT_TEAM}
     CODE_SIGN_STYLE: Automatic
@@ -108,31 +108,38 @@ packages:
     url: https://github.com/facebook/meta-wearables-dat-ios
     # Pinned EXACTLY — this SDK rewrites its API most releases, so never float (`from:`).
     #
-    # 0.5.0 -> 1.0.0: device support gates on SDK version. "Blayzer Optics" glasses (issue #55)
+    # 0.5.0 -> 1.0.1: device support gates on SDK version. "Blayzer Optics" glasses (issue #55)
     # enumerate as 0 devices on 0.5.0, which predates that hardware; support for the newer
     # frames landed in 0.6.0 (Ray-Ban Meta Optics) and 0.8.0 (Meta Glasses). 1.0.0 keeps the
     # camera-consolidation API: DeviceSession.addCamera(config:) -> Camera -> camera.stream
     # and adds voice invocation, device-health, and standalone high-quality photo APIs.
-    # Requires iOS 17.2+.
+    # 1.0.1 is a patch release with no developer-facing changes. Requires iOS 17.2+.
     # MUST be regression-tested on Gen 1/2 glasses (register + stream + HFP mic) before merge.
-    exactVersion: "1.0.0"
-  # Keep MLX pinned at the root so every consumer resolves the same identity. The PrismML
-  # v0.31.6_prism branch now requires Swift tools 6.3, which Xcode 26.2 cannot load. Upstream
-  # 0.31.4 is the last version used by this project that is compatible with Xcode 26.2.
-  # This keeps the standard local MLX models and Kokoro available; Bonsai's 1-bit kernels require
-  # upgrading Xcode and switching this dependency back to the PrismML fork.
+    exactVersion: "1.0.1"
+  # PrismML fork of mlx-swift, adding 1-bit quantized Metal kernels (upstream PR pending).
+  # Needed to load Bonsai-8B (Qwen3-8B at 1-bit g128, 1.28 GB vs E2B's 3.6 GB). Declared at the
+  # ROOT so every consumer (mlx-swift-lm + the three vendored packages) resolves the same identity.
+  # Pinned to v0.31.6_prism, NOT the fork's default `prism` branch: `prism` is 10 commits behind and
+  # misses "gate NAX to gen-18+ (M5/gen-17 miscompute)" — a correctness fix for current Apple GPUs.
+  # Upstream base is 0.31.6 (we were on 0.31.4); Kokoro asks for >= 0.29.1, so it satisfies both.
   mlx-swift:
-    url: https://github.com/ml-explore/mlx-swift.git
-    exactVersion: "0.31.4"
+    url: https://github.com/PrismML-Eng/mlx-swift.git
+    branch: v0.31.6_prism
   mlx-swift-lm:
     url: https://github.com/ml-explore/mlx-swift-lm.git
     # Pinned to a main commit PAST the 3.31.4 tag that fixes Gemma 4 E2B loading. 3.31.4's VLM backbone
     # built k_proj/v_proj/k_norm for ALL layers (never passed kvSharedOnly), so E2B's shared-KV layers
     # 15-34 demanded weights the checkpoint omits → keyNotFound. This commit ("Fix MLXVLM Gemma4 loader
     # to honor num_kv_shared_layers") passes kvSharedOnly per layer + guards attention on isKVSharedLayer.
-    # NOT bumped to main HEAD: a later commit (#369) adopts a newer mlx-swift API (greatestFiniteMagnitudeArray)
-    # we don't have (mlx-swift is 0.31.4, shared with the vendored Kokoro), so we pin just before it.
-    revision: "68947ccdca79bcf7a26dc220f73caa060369513c"
+    # The previous pin stopped just before #369, which needed a newer mlx-swift API
+    # (greatestFiniteMagnitudeArray) than the 0.31.4 we had then.
+    #
+    # Bumped to 14414441 ("Fix MLXFoundationModels compilation against the Xcode 27 beta 5 SDK", #544):
+    # the commit above was written against an earlier iOS 27 beta FoundationModels API, so on the
+    # Xcode 27 release SDK MLXFoundationModels fails with "extraneous argument label 'capabilities:'"
+    # and "'_' can only appear in a pattern". It descends from the commit above (keeps the Gemma 4
+    # kvSharedOnly fix) and includes #369, which now builds since mlx-swift moved to 0.31.6 (PrismML fork).
+    revision: "14414441fa44f45eee35a61e9fa0bab577cf9734"
   # CoreML Silero VAD (Apache 2.0). Gives us ACOUSTIC end-of-speech detection: the endpoint
   # countdown can start when the mic actually goes quiet instead of when SFSpeechRecognizer stops
   # emitting partials (which it does in bursts with ~1s gaps mid-sentence, so transcript timing

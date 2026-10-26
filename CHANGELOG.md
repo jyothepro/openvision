@@ -5,6 +5,63 @@ All notable changes to OpenVision will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- Pin Meta Wearables DAT to **1.0.1** in both the Xcode project and XcodeGen specification. Meta reports no developer-facing changes from 1.0.0.
+- Reconcile the DAT integration with current Keychain credential storage, neural speech callbacks, and the compatible MLX/MLX-LM dependency pair.
+
+## [2.14.0] - 2026-10-02
+
+### Added
+- **Grok backend** — xAI Grok joins as the sixth backend, over xAI's public Chat Completions API with an xAI API key or a **SuperGrok subscription sign-in**. Photos from the glasses, web search, the native tools and conversation history all work through the same code as OpenAI (now shared in `CloudChat`). The model picker loads your account's live model list; default is the `grok-4.20-non-reasoning` alias (#61)
+- **ChatGPT subscription sign-in for the OpenAI backend** — Settings → OpenAI gains a "Connect With" choice: API key, or sign in with your ChatGPT Plus/Pro account and use the subscription. OAuth with PKCE, tokens in the Keychain, single-flight rotation-safe refresh. Text, photos, web search and tools work; live video still needs an API key. Uses the Codex CLI's integration surface, so it is unofficial and could change without notice (#60)
+- **Cloud voices** — two new speech engines next to Apple and Kokoro: **Grok** (28 multilingual voices, follows the reply's language) and **OpenAI** (`gpt-4o-mini-tts`, 13 voices; needs an API key with credits). Sentences are synthesized as they're written, at most three in flight, and played in order and gaplessly; the voice is mixed into session recordings like Kokoro's (#61)
+- **Voice previews** — every neural engine's voice list has a play button per voice, so you can hear a voice before choosing it (#61)
+
+### Changed
+- `mlx-swift-lm` pin moved to upstream `14414441`, which fixes `MLXFoundationModels` against the Xcode 27 release SDK. **Building on Xcode 27 now works**; the Gemma 4 E2B loader fix is retained (#59)
+- Kokoro and the cloud voices sit behind one `NeuralSpeechEngine` protocol, so stop, barge-in and the speaking state behave identically for every neural voice (#61)
+
+### Fixed
+- Ambient watch-loop narration could reset a streaming reply's speaking state mid-reply and let barge-in fire on the assistant's own voice; fixed for Kokoro and the cloud engines (#61)
+- Player-node completion callbacks from a stopped reply can no longer decrement the buffer count of the reply that replaced it (#61)
+
+### Known limitations
+- OpenAI voice has not yet been verified on a device (no contributor had API credits); it shares the Grok playback path
+- A cloud-voice sentence that fails to synthesize is skipped and logged rather than spoken by the Apple voice (#62)
+- Signing in to ChatGPT on the phone appears to end a Codex CLI session for the same account, and vice versa
+
+## [2.13.0] - 2026-08-17
+
+### Changed
+- **Meta DAT SDK 0.5.0 → 0.9.0** — newer glasses (Ray-Ban Meta Gen 2 "Blayzer Optics", Meta Glasses, Oakley Meta) were invisible because the pinned SDK predated the hardware. Migrated to the 0.9.0 camera lifecycle (`DeviceSession` → `addCamera` → `camera.stream`, session must reach `.started` first). Field-verified on Ray-Ban Meta Gen 1/2 and Blayzer Gen 2 (#55)
+- **Required one-time setup for source builders**: in the Wearables Developer Center fill your Apple Team ID and toggle Camera access ON, then Unregister → Register in the app, then tap the new **Install/Update Glasses App** button. Requires glasses firmware V126+, Meta AI V282+, iOS 17.2+. See SETUP.md
+
+### Added
+- **Install/Update Glasses App** button in glasses settings, which stages the on-glasses developer component via Meta AI. Without it, sessions die with "Device unavailable" (#55)
+- Session error-stream and device compatibility diagnostics (#55)
+
+### Fixed
+- Stream errors no longer pop a modal while the app is backgrounded; the raw codec pauses by design on screen lock (#55)
+
+## [2.12.0] - 2026-08-15
+
+### Added
+- **Scene-identity context gating** for local live vision — cached descriptions, grounding hints and history are only injected when the current frame still shows the scene they came from, so a small VLM no longer repeats an old scene after a head-turn
+- Wake word recognized mid-sentence while no audio is playing
+- In live mode a bare **"stop"** silences speech and stays in live video; **"stop video"** exits. Stop matching is word-boundary aware ("desktop" no longer triggers it)
+- In-flight scene descriptions are cancellable, so a question never queues behind one
+
+### Changed
+- Meta DAT SDK 0.4.0 → 0.5.0 (first step toward newer glasses; completed in 2.13.0)
+- Live-vision answers run at 512px, temperature 0, with a rolling scene memory
+
+### Fixed
+- Barge-in now works with Kokoro TTS and while the agent is thinking; it was Apple-TTS-only
+- "Please upload an image" refusal loop: vision questions outside live mode get spoken guidance instead of an imageless model call, and refusal turns are quarantined from history
+- A `stopWords` redeclaration that collided with the fuzzy video-stop matcher
+
 ## [2.11.0] - 2026-08-15
 
 ### Added
