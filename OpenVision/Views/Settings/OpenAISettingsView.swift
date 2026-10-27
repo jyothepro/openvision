@@ -38,6 +38,7 @@ struct OpenAISettingsView: View {
             case .chatGPTSubscription: subscriptionSections
             }
         }
+        .mayaFormSurface()
         .navigationTitle("OpenAI")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {

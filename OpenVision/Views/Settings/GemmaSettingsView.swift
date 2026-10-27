@@ -100,6 +100,7 @@ struct GemmaSettingsView: View {
                 }
             }
         }
+        .mayaFormSurface()
         .navigationTitle("Local Models")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {

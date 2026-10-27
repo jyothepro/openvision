@@ -42,7 +42,7 @@ struct DocumentsSettingsView: View {
                             }
                         } label: {
                             Image(systemName: focus.activeDocument?.id == doc.id ? "book.fill" : "book")
-                                .foregroundColor(focus.activeDocument?.id == doc.id ? .indigo : .secondary)
+                                .foregroundColor(focus.activeDocument?.id == doc.id ? Theme.accent : .secondary)
                         }
                         .buttonStyle(.borderless)
                     }
@@ -74,6 +74,7 @@ struct DocumentsSettingsView: View {
                 .disabled(importing)
             }
         }
+        .mayaFormSurface()
         .navigationTitle("My Documents")
         .onAppear(perform: reload)
         .fileImporter(isPresented: $showImporter,

@@ -132,7 +132,7 @@ APP_LINK_URL_SCHEME = openvision
 The Meta Wearables Device Access Toolkit (DAT) SDK is required for glasses integration.
 
 **Nothing to do — this is already wired up.** `project.yml` declares the SDK
-(`https://github.com/facebook/meta-wearables-dat-ios`, pinned to `0.4.0`) and pulls in
+(`https://github.com/facebook/meta-wearables-dat-ios`, pinned to `1.0.1`) and pulls in
 `MWDATCore` + `MWDATCamera`, so `xcodegen generate` and a build resolve it for you.
 
 > The pin is deliberate: 0.6.0 made `StreamSession.init` inaccessible and 0.7.0 renamed the
@@ -349,7 +349,7 @@ If you have Meta Ray-Ban glasses:
 
 ### OpenClaw Mode
 
-1. Tap the main orb button OR say **"Hey Vision"**
+1. Tap the main orb button OR say **"Hi Maya"**
 2. Wait for "Listening..." status
 3. Speak your question or command
 4. AI responds via text-to-speech

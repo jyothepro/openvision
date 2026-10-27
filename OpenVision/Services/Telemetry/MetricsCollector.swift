@@ -76,7 +76,7 @@ final class MetricsCollector: ObservableObject {
     /// Record a counted occurrence (wake word heard, recognizer restarted, …).
     ///
     /// Speech-recognition QUALITY is otherwise invisible: transcripts arrive garbled
-    /// ("53258 Okay Vision") with nothing to measure. Counting wake-word detections against
+    /// ("53258 Hey Maya") with nothing to measure. Counting wake-word detections against
     /// completed commands, and counting recognizer restarts, gives a usable proxy — a high
     /// restart rate means the recognizer is churning, which is what shreds transcripts.
     /// Names only; never anything the user said.

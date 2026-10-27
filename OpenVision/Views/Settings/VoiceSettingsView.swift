@@ -66,7 +66,7 @@ struct VoiceSettingsView: View {
                         Text("Wake Phrase")
                             .font(.caption)
                             .foregroundColor(.secondary)
-                        TextField("Ok Vision", text: $settingsManager.settings.wakeWord)
+                        TextField(Constants.Voice.defaultWakeWord, text: $settingsManager.settings.wakeWord)
                             .autocorrectionDisabled()
                     }
                 }
@@ -228,9 +228,10 @@ struct VoiceSettingsView: View {
             } header: {
                 Text("Examples")
             } footer: {
-                Text("The wake word detection is flexible and will recognize variations like \"OK Vision\" or \"Okay Vision\".")
+                Text("The wake phrase also recognizes \"Hey Maya\" and common speech recognition spellings of Maya.")
             }
         }
+        .mayaFormSurface()
         .navigationTitle("Voice Control")
         .navigationBarTitleDisplayMode(.inline)
     }

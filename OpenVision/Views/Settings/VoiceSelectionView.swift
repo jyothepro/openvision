@@ -100,6 +100,7 @@ struct VoiceSelectionView: View {
                 Text("Download premium and enhanced voices in iOS Settings → Accessibility → Spoken Content → Voices")
             }
         }
+        .mayaFormSurface()
         .navigationTitle("TTS Voice")
         .onAppear {
             loadVoices()

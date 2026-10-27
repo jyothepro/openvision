@@ -121,6 +121,7 @@ struct AIBackendSettingsView: View {
                 Text("Configuration")
             }
         }
+        .mayaFormSurface()
         .navigationTitle("AI Backend")
         .navigationBarTitleDisplayMode(.inline)
     }

@@ -17,6 +17,7 @@ struct TelemetrySettingsView: View {
             pushSection
             privacySection
         }
+        .mayaFormSurface()
         .navigationTitle("Telemetry")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {

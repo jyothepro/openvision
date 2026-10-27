@@ -5,6 +5,12 @@ All notable changes to OpenVision will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- Pin Meta Wearables DAT to **1.0.1** in both the Xcode project and XcodeGen specification. Meta reports no developer-facing changes from 1.0.0.
+- Reconcile the DAT integration with current Keychain credential storage, neural speech callbacks, and the compatible MLX/MLX-LM dependency pair.
+
 ## [2.14.0] - 2026-10-02
 
 ### Added

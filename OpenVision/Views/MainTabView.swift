@@ -9,6 +9,7 @@ struct MainTabView: View {
     @EnvironmentObject var settingsManager: SettingsManager
     @EnvironmentObject var glassesManager: GlassesManager
     @EnvironmentObject var conversationManager: ConversationManager
+    @ObservedObject private var mayaShortcutRouter = MayaShortcutRouter.shared
 
     // MARK: - State
 
@@ -29,58 +30,25 @@ struct MainTabView: View {
             }
         }
 
-        var selectedIcon: String {
-            switch self {
-            case .voice: return "waveform.circle.fill"
-            case .history: return "clock.fill"
-            case .settings: return "gearshape.fill"
-            }
-        }
     }
 
     // MARK: - Body
 
     var body: some View {
         TabView(selection: $selectedTab) {
-            // Voice Agent Tab
-            VoiceAgentView()
-                .tabItem {
-                    Label(Tab.voice.rawValue, systemImage: Tab.voice.icon)
-                }
-                .tag(Tab.voice)
-
-            // History Tab
-            ConversationListView()
-                .tabItem {
-                    Label(Tab.history.rawValue, systemImage: Tab.history.icon)
-                }
-                .tag(Tab.history)
-
-            // Settings Tab
-            SettingsView()
-                .tabItem {
-                    Label(Tab.settings.rawValue, systemImage: Tab.settings.icon)
-                }
-                .tag(Tab.settings)
+            SwiftUI.Tab(Tab.voice.rawValue, systemImage: Tab.voice.icon, value: Tab.voice) {
+                VoiceAgentView()
+            }
+            SwiftUI.Tab(Tab.history.rawValue, systemImage: Tab.history.icon, value: Tab.history) {
+                ConversationListView()
+            }
+            SwiftUI.Tab(Tab.settings.rawValue, systemImage: Tab.settings.icon, value: Tab.settings) {
+                SettingsView()
+            }
         }
         .tint(Theme.accent)
-        .onAppear {
-            // Customize tab bar appearance for dark mode
-            let appearance = UITabBarAppearance()
-            appearance.configureWithOpaqueBackground()
-            appearance.backgroundColor = UIColor(white: 0.05, alpha: 0.95)
-
-            // Normal state
-            appearance.stackedLayoutAppearance.normal.iconColor = .gray
-            appearance.stackedLayoutAppearance.normal.titleTextAttributes = [.foregroundColor: UIColor.gray]
-
-            // Selected state — emerald accent (matches Theme.accent)
-            let accent = UIColor(red: 0.16, green: 0.85, blue: 0.47, alpha: 1)
-            appearance.stackedLayoutAppearance.selected.iconColor = accent
-            appearance.stackedLayoutAppearance.selected.titleTextAttributes = [.foregroundColor: accent]
-
-            UITabBar.appearance().standardAppearance = appearance
-            UITabBar.appearance().scrollEdgeAppearance = appearance
+        .onChange(of: mayaShortcutRouter.voiceRouteID) {
+            selectedTab = .voice
         }
     }
 }
@@ -90,5 +58,4 @@ struct MainTabView: View {
         .environmentObject(SettingsManager.shared)
         .environmentObject(GlassesManager.shared)
         .environmentObject(ConversationManager.shared)
-        .preferredColorScheme(.dark)
 }

@@ -1,5 +1,5 @@
 // OpenVision - VoiceAgentView.swift
-// Beautiful main voice conversation UI with glassmorphism design.
+// Main voice conversation UI in Maya's warm palette.
 //
 // MVVM: this view only renders state and forwards interactions — every piece of orchestration
 // (session lifecycle, command routing, live video, TTS streaming) lives in VoiceAgentViewModel.
@@ -11,6 +11,7 @@ struct VoiceAgentView: View {
 
     @EnvironmentObject var settingsManager: SettingsManager
     @EnvironmentObject var glassesManager: GlassesManager
+    @ObservedObject private var mayaShortcutRouter = MayaShortcutRouter.shared
 
     // MARK: - ViewModel
 
@@ -31,12 +32,7 @@ struct VoiceAgentView: View {
 
     var body: some View {
         ZStack {
-            // Beautiful animated background
             AnimatedBackground()
-
-            // Particle effects
-            ParticleEffect(particleCount: 30)
-                .opacity(0.5)
 
             // Main content — the orb stays vertically centered and STABLE. The transcript is a
             // separate overlay (below) so it can never push the orb around.
@@ -46,17 +42,21 @@ struct VoiceAgentView: View {
                 // Document-focus pill: visible whenever a document is "open" so the mode is never
                 // silently steering answers. Tap to release focus.
                 if let doc = documentFocus.activeDocument {
-                    HStack(spacing: 6) {
-                        Image(systemName: "book.fill").font(.caption2)
-                        Text(doc.title).font(.caption.bold()).lineLimit(1)
-                        Image(systemName: "xmark.circle.fill").font(.caption2).opacity(0.7)
+                    Button {
+                        documentFocus.deactivate()
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "book.fill").font(.caption2)
+                            Text(doc.title).font(.caption.bold()).lineLimit(1)
+                            Image(systemName: "xmark.circle.fill").font(.caption2).opacity(0.7)
+                        }
+                        .foregroundStyle(Theme.textPrimary)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
                     }
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(Capsule().fill(Color.indigo.opacity(0.8)))
+                    .buttonStyle(.plain)
+                    .background(Theme.bgElevated, in: Capsule())
                     .padding(.top, 8)
-                    .onTapGesture { documentFocus.deactivate() }
                     .transition(.opacity)
                 }
                 Spacer()
@@ -87,16 +87,23 @@ struct VoiceAgentView: View {
         .animation(.easeInOut(duration: 0.3), value: viewModel.agentState)
         .animation(.easeInOut(duration: 0.35), value: viewModel.userTranscript.isEmpty)
         .animation(.easeInOut(duration: 0.35), value: viewModel.aiTranscript.isEmpty)
-        .onAppear { viewModel.onAppear() }
+        .onAppear {
+            viewModel.onAppear()
+            startListeningForExternalLaunchIfNeeded()
+        }
         .onDisappear { viewModel.onDisappear() }
+        .onChange(of: mayaShortcutRouter.voiceRouteID) {
+            viewModel.onAppear()
+            startListeningForExternalLaunchIfNeeded()
+        }
         .task {
             await viewModel.requestSpeechAuthorization()
         }
         // Observe TTS state changes
-        .onChange(of: ttsService.isSpeaking) { isSpeaking in
+        .onChange(of: ttsService.isSpeaking) { _, isSpeaking in
             viewModel.ttsSpeakingChanged(isSpeaking)
         }
-        .onChange(of: kokoroTTS.isSpeaking) { speaking in
+        .onChange(of: kokoroTTS.isSpeaking) { _, speaking in
             viewModel.neuralSpeakingChanged(speaking)
         }
         .onChange(of: grokTTS.isSpeaking) { _, speaking in
@@ -106,12 +113,23 @@ struct VoiceAgentView: View {
             viewModel.neuralSpeakingChanged(speaking)
         }
         // Control thinking sound based on agent state
-        .onChange(of: viewModel.agentState) { newState in
+        .onChange(of: viewModel.agentState) { _, newState in
             viewModel.agentStateChanged(newState)
         }
         // Observe VoiceCommandService state changes
-        .onChange(of: voiceCommandService.state) { newState in
+        .onChange(of: voiceCommandService.state) { _, newState in
             viewModel.voiceStateChanged(newState)
+        }
+    }
+
+    /// A DAT `LaunchApp` invocation should be hands-free: navigating to Voice is not enough.
+    /// Start conversation mode immediately so the user's next words are treated as the command.
+    private func startListeningForExternalLaunchIfNeeded() {
+        guard mayaShortcutRouter.consumeListeningRequest() else { return }
+        Task {
+            await viewModel.requestSpeechAuthorization()
+            guard viewModel.agentState == .idle else { return }
+            viewModel.startSession()
         }
     }
 
@@ -148,7 +166,7 @@ struct VoiceAgentView: View {
             } else {
                 StatusPill(
                     status: settingsManager.settings.backendDisplayName,
-                    color: viewModel.agentState == .idle ? .gray : .green,
+                    color: viewModel.agentState == .idle ? Theme.textSecondary : Theme.accent,
                     isConnected: viewModel.agentState != .idle && viewModel.agentState != .connecting
                 )
             }
@@ -159,10 +177,10 @@ struct VoiceAgentView: View {
             if let status = viewModel.recordingStatus {
                 Text(status)
                     .font(.caption.bold())
-                    .foregroundColor(.white)
+                    .foregroundStyle(Theme.textPrimary)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
-                    .background(Capsule().fill(.black.opacity(0.55)))
+                    .background(Theme.bgElevated, in: Capsule())
                     .transition(.opacity)
             }
 
@@ -173,7 +191,7 @@ struct VoiceAgentView: View {
                 } label: {
                     Image(systemName: viewModel.isRecording ? "stop.circle.fill" : "record.circle")
                         .font(.title2)
-                        .foregroundColor(viewModel.isRecording ? .red : .white)
+                        .foregroundStyle(viewModel.isRecording ? .red : Theme.textPrimary)
                         .padding(.horizontal, 4)
                 }
                 .accessibilityLabel(viewModel.isRecording ? "Stop recording" : "Record point of view")
@@ -182,7 +200,7 @@ struct VoiceAgentView: View {
             // Glasses status
             HStack(spacing: 8) {
                 Image(systemName: "eyeglasses")
-                    .foregroundColor(glassesManager.isRegistered ? .green : .gray)
+                    .foregroundStyle(glassesManager.isRegistered ? Theme.accent : Theme.textSecondary)
 
                 if glassesManager.isStreaming {
                     Circle()
@@ -192,22 +210,15 @@ struct VoiceAgentView: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(
-                Capsule()
-                    .fill(.ultraThinMaterial)
-                    .overlay(
-                        Capsule()
-                            .stroke(Color.white.opacity(0.1), lineWidth: 1)
-                    )
-            )
+            .background(Theme.bgElevated, in: Capsule())
         }
         .padding(.horizontal)
     }
 
     // MARK: - Center Content
 
-    /// Map the agent state to the orb's visual mode.
-    private var orbMode: SwirlOrb.Mode {
+    /// Map the agent state to Maya's visual mode.
+    private var presenceMode: MayaPresenceView.Mode {
         switch viewModel.agentState {
         case .listening: return .listening
         case .speaking: return .speaking
@@ -235,7 +246,7 @@ struct VoiceAgentView: View {
                             .font(.system(size: 30, weight: .bold, design: .rounded))
                             .foregroundColor(Theme.heading)
                         if viewModel.isVoiceReady {
-                            Text("Say \"\(settingsManager.settings.wakeWord)\" or tap the orb")
+                            Text("Say \"\(settingsManager.settings.wakeWord)\" or tap Maya")
                                 .font(.subheadline)
                                 .foregroundColor(Theme.textSecondary)
                         } else {
@@ -251,9 +262,13 @@ struct VoiceAgentView: View {
             }
             .transition(.opacity)
 
-            // The assistant identity: swirling emerald orb (tap to start/stop a session)
-            SwirlOrb(mode: orbMode, size: 250)
-                .onTapGesture { viewModel.toggleSession() }
+            Button {
+                viewModel.toggleSession()
+            } label: {
+                MayaPresenceView(mode: presenceMode, size: 250)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(viewModel.agentState == .idle ? "Start talking to Maya" : "Stop talking to Maya")
 
             // Status text
             Text(viewModel.agentState.displayText)
@@ -325,5 +340,4 @@ struct VoiceAgentView: View {
     VoiceAgentView()
         .environmentObject(SettingsManager.shared)
         .environmentObject(GlassesManager.shared)
-        .preferredColorScheme(.dark)
 }

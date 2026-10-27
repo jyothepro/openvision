@@ -72,6 +72,11 @@ final class SettingsManager: ObservableObject {
         settings = merged.settings
         unreadableSecrets = merged.unreadable
         for (account, stored) in keychain { if case .value(let value) = stored { storedSecrets[account] = value } }
+        // Preserve customized phrases while migrating the former default.
+        if settings.wakeWord.caseInsensitiveCompare("Ok Vision") == .orderedSame {
+            settings.wakeWord = Constants.Voice.defaultWakeWord
+            saveNow()
+        }
 
         print("[SettingsManager] Initialized with settings from: \(settingsURL.path)")
 

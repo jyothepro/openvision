@@ -73,6 +73,7 @@ struct MemoriesView: View {
                 }
             }
         }
+        .mayaFormSurface()
         .navigationTitle("Memories")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -181,6 +182,7 @@ struct MemoryEditorView: View {
                     }
                 }
             }
+            .mayaFormSurface()
             .navigationTitle(isNewMemory ? "New Memory" : "Edit Memory")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

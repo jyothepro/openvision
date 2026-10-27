@@ -108,13 +108,14 @@ packages:
     url: https://github.com/facebook/meta-wearables-dat-ios
     # Pinned EXACTLY — this SDK rewrites its API most releases, so never float (`from:`).
     #
-    # 0.5.0 -> 0.9.0: device support gates on SDK version. "Blayzer Optics" glasses (issue #55)
+    # 0.5.0 -> 1.0.1: device support gates on SDK version. "Blayzer Optics" glasses (issue #55)
     # enumerate as 0 devices on 0.5.0, which predates that hardware; support for the newer
-    # frames landed in 0.6.0 (Ray-Ban Meta Optics) and 0.8.0 (Meta Glasses). 0.9.0 is the
+    # frames landed in 0.6.0 (Ray-Ban Meta Optics) and 0.8.0 (Meta Glasses). 1.0.0 keeps the
     # camera-consolidation API: DeviceSession.addCamera(config:) -> Camera -> camera.stream
-    # (StreamSession/addStream are gone). Requires iOS 17.2+.
+    # and adds voice invocation, device-health, and standalone high-quality photo APIs.
+    # 1.0.1 is a patch release with no developer-facing changes. Requires iOS 17.2+.
     # MUST be regression-tested on Gen 1/2 glasses (register + stream + HFP mic) before merge.
-    exactVersion: "0.9.0"
+    exactVersion: "1.0.1"
   # PrismML fork of mlx-swift, adding 1-bit quantized Metal kernels (upstream PR pending).
   # Needed to load Bonsai-8B (Qwen3-8B at 1-bit g128, 1.28 GB vs E2B's 3.6 GB). Declared at the
   # ROOT so every consumer (mlx-swift-lm + the three vendored packages) resolves the same identity.

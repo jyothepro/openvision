@@ -115,6 +115,7 @@ struct OpenClawSettingsView: View {
                 Text("OpenClaw runs on your local machine or cloud server. It provides 56+ tools for task automation.")
             }
         }
+        .mayaFormSurface()
         .navigationTitle("OpenClaw")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {

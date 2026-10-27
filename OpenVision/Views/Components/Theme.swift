@@ -1,74 +1,50 @@
-// OpenVision - Theme.swift
-// App-wide visual theme: emerald-on-black assistant aesthetic.
-//
-// Palette + gradients live here so surfaces stay consistent and re-coloring the brand is a
-// one-file change. Modeled on the reference design: near-black backgrounds with a vivid emerald
-// glow as the single signature accent.
+// Maya's colors come from the Listening Glasses icon. Content stays warm and readable;
+// system controls supply the platform's glass treatment on supported iOS releases.
 
 import SwiftUI
+import UIKit
 
 enum Theme {
-    // MARK: - Core accent (emerald)
+    static let teal = Color(red: 20 / 255, green: 106 / 255, blue: 102 / 255)
+    static let leaf = Color(red: 164 / 255, green: 201 / 255, blue: 79 / 255)
+    static let charcoal = Color(red: 36 / 255, green: 52 / 255, blue: 67 / 255)
+    static let ivory = Color(red: 1, green: 244 / 255, blue: 221 / 255)
 
-    /// Signature emerald — buttons, active states, the orb.
-    static let accent = Color(red: 0.16, green: 0.85, blue: 0.47)        // ~#29D978
-    /// Brighter tint for highlights / glow cores.
-    static let accentBright = Color(red: 0.45, green: 0.96, blue: 0.58)  // ~#73F594
-    /// Deeper emerald for gradient shadows.
-    static let accentDeep = Color(red: 0.04, green: 0.55, blue: 0.30)    // ~#0A8C4D
-    /// Luminous green used for glows.
-    static let glow = Color(red: 0.22, green: 0.95, blue: 0.52)
+    static let accent = adaptive(light: UIColor(red: 20 / 255, green: 106 / 255, blue: 102 / 255, alpha: 1),
+                                 dark: UIColor(red: 137 / 255, green: 213 / 255, blue: 179 / 255, alpha: 1))
+    static let bg = adaptive(light: UIColor(red: 1, green: 244 / 255, blue: 221 / 255, alpha: 1),
+                             dark: UIColor(red: 19 / 255, green: 34 / 255, blue: 35 / 255, alpha: 1))
+    static let bgElevated = adaptive(light: UIColor(red: 1, green: 250 / 255, blue: 240 / 255, alpha: 1),
+                                     dark: UIColor(red: 31 / 255, green: 53 / 255, blue: 51 / 255, alpha: 1))
+    static let bgElevatedStroke = adaptive(light: UIColor(red: 20 / 255, green: 106 / 255, blue: 102 / 255, alpha: 0.14),
+                                           dark: UIColor(red: 194 / 255, green: 229 / 255, blue: 205 / 255, alpha: 0.16))
+    static let textPrimary = adaptive(light: UIColor(red: 36 / 255, green: 52 / 255, blue: 67 / 255, alpha: 1),
+                                      dark: UIColor(red: 248 / 255, green: 246 / 255, blue: 234 / 255, alpha: 1))
+    static let textSecondary = adaptive(light: UIColor(red: 78 / 255, green: 94 / 255, blue: 99 / 255, alpha: 1),
+                                        dark: UIColor(red: 188 / 255, green: 205 / 255, blue: 194 / 255, alpha: 1))
+    static let heading = accent
 
-    // MARK: - Backgrounds
+    private static func adaptive(light: UIColor, dark: UIColor) -> Color {
+        Color(uiColor: UIColor { traits in
+            traits.userInterfaceStyle == .dark ? dark : light
+        })
+    }
+}
 
-    static let bg = Color(red: 0.02, green: 0.03, blue: 0.025)           // near-black, faint green
-    static let bgElevated = Color(red: 0.07, green: 0.09, blue: 0.075)   // cards / pills
-    static let bgElevatedStroke = Color.white.opacity(0.08)
-
-    // MARK: - Text
-
-    static let textPrimary = Color.white
-    static let textSecondary = Color.white.opacity(0.55)
-    /// Light-green heading tint (the "What can I do…" look).
-    static let heading = Color(red: 0.62, green: 0.98, blue: 0.66)
-
-    // MARK: - Gradients
-
-    /// Primary CTA / active pill fill (top-lit emerald).
-    static var buttonGradient: LinearGradient {
-        LinearGradient(
-            colors: [Color(red: 0.34, green: 0.96, blue: 0.58), Color(red: 0.10, green: 0.78, blue: 0.42)],
-            startPoint: .top, endPoint: .bottom
-        )
+extension View {
+    func mayaFormSurface() -> some View {
+        scrollContentBackground(.hidden)
+            .background(Theme.bg)
     }
 
-    /// Stroke gradient for the swirling orb rings.
-    static var ringGradient: AngularGradient {
-        AngularGradient(
-            colors: [accentBright, accent, accentDeep, accent, accentBright],
-            center: .center
-        )
+    @ViewBuilder
+    func mayaPrimaryAction() -> some View {
+        if #available(iOS 26, *) {
+            buttonStyle(.glassProminent)
+                .tint(Theme.teal)
+        } else {
+            buttonStyle(.borderedProminent)
+                .tint(Theme.teal)
+        }
     }
-
-    /// Per-loop stroke: one side bright, the other fading — gives each ellipse depth so the
-    /// overlapping rosette reads as a woven 3D torus of light rather than flat rings.
-    static var loopGradient: LinearGradient {
-        LinearGradient(
-            colors: [accentBright, glow, accent.opacity(0.35)],
-            startPoint: .leading, endPoint: .trailing
-        )
-    }
-
-    /// Ambient radial glow used behind the orb / at screen top.
-    static func glowGradient(_ opacity: Double = 0.9) -> RadialGradient {
-        RadialGradient(
-            colors: [glow.opacity(opacity), accent.opacity(opacity * 0.35), .clear],
-            center: .center, startRadius: 0, endRadius: 220
-        )
-    }
-
-    // MARK: - Surfaces
-
-    /// Frosted card fill.
-    static let glass = Color.white.opacity(0.05)
 }
