@@ -67,6 +67,7 @@ enum CloudChat {
             if offerTools { body["tools"] = tools }
             if let maxTokens { body["max_tokens"] = maxTokens }
             let (data, response) = try await send(try JSONSerialization.data(withJSONObject: body))
+            try Task.checkCancellation()
             guard let http = response as? HTTPURLResponse else { throw CloudChatError.noResponse(label) }
             guard (200...299).contains(http.statusCode) else {
                 let detail = errorMessage(from: data) ?? "HTTP \(http.statusCode)"
@@ -79,10 +80,12 @@ enum CloudChat {
             if let toolCalls = message["tool_calls"] as? [[String: Any]], !toolCalls.isEmpty {
                 messages.append(message)   // the assistant turn carrying tool_calls
                 for call in toolCalls {
+                    try Task.checkCancellation()
                     let id = call["id"] as? String ?? ""
                     let fn = call["function"] as? [String: Any]
                     let toolName = fn?["name"] as? String ?? ""
                     let result = await runTool(toolName, arguments: fn?["arguments"] as? String)
+                    try Task.checkCancellation()
                     messages.append(["role": "tool", "tool_call_id": id, "content": result])
                 }
                 continue

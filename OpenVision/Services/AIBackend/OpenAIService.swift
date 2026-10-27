@@ -34,6 +34,7 @@ final class OpenAIService: ObservableObject {
 
     /// Send a prompt (optionally with an image) and deliver the reply via `onAgentMessage`.
     func sendMessage(_ text: String, imageData: Data? = nil) async throws {
+        try Task.checkCancellation()
         guard settings.isOpenAIConfigured else { throw OpenAIError.notConfigured }
         // Record the utterance for the tool registry's relative-time guard.
         NativeToolContext.shared.set(text)
@@ -61,6 +62,7 @@ final class OpenAIService: ObservableObject {
                 return try await CloudChat.dataWithRetry(for: request)
             }
         }
+        try Task.checkCancellation()
         ConversationContext.shared.record(user: text, assistant: reply)
         onAgentMessage?(reply)
     }
@@ -90,13 +92,16 @@ final class OpenAIService: ObservableObject {
 
         for _ in 0..<4 {
             let items = try await ChatGPTSubscription.respond(model: model, instructions: instructions, input: input, tools: tools)
+            try Task.checkCancellation()
             // Echo every item (reasoning included) back — the backend is stateless (store:false).
             input.append(contentsOf: items)
 
             let calls = items.filter { $0["type"] as? String == "function_call" }
             if !calls.isEmpty {
                 for call in calls {
+                    try Task.checkCancellation()
                     let result = await CloudChat.runTool(call["name"] as? String ?? "", arguments: call["arguments"] as? String)
+                    try Task.checkCancellation()
                     input.append(["type": "function_call_output", "call_id": call["call_id"] as? String ?? "", "output": result])
                 }
                 continue
