@@ -79,6 +79,26 @@ struct AIBackendSettingsView: View {
                 }
 
                 NavigationLink {
+                    GrokSettingsView()
+                } label: {
+                    HStack {
+                        Label("Grok Settings", systemImage: "bolt")
+                        Spacer()
+                        configurationBadge(configured: settingsManager.settings.isGrokConfigured)
+                    }
+                }
+
+                NavigationLink {
+                    HermesSettingsView()
+                } label: {
+                    HStack {
+                        Label("Hermes Settings", systemImage: "server.rack")
+                        Spacer()
+                        configurationBadge(configured: settingsManager.settings.isHermesConfigured)
+                    }
+                }
+
+                NavigationLink {
                     AppleIntelligenceSettingsView()
                 } label: {
                     HStack {
